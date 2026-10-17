@@ -12,8 +12,8 @@ android {
         applicationId 'br.com.poderazul.spikesbot'
         minSdk 30
         targetSdk 34
-        versionCode 18
-        versionName '1.8-recuperacao'
+        versionCode 19
+        versionName '1.9-beta'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

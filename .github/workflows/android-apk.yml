@@ -33,7 +33,7 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: SpikesBot-Kwai-v1.8-RECUPERACAO-APK
+          name: SpikesBot-Kwai-v1.9-beta-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

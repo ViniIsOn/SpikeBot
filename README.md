@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.8 — Recuperação 🐦
+# SpikesBot Kwai • v1.9 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -260,3 +260,14 @@ Esta versão retorna exatamente ao **núcleo de controle da v1.5**, a última ve
 5. Se persistir, informe se ocorre fechamento forçado, falta de toques ou tela congelada; consulte STATUS / DIAGNÓSTICO.
 
 Para melhorar a jogabilidade a partir daqui, uma próxima versão deverá incorporar testes de replay com a caixa-preta real; não confundir uma compilação bem-sucedida com piloto validado.
+
+## v1.9 — capturas e telemetria sem travar o controle
+
+Na caixa-preta v1.8: 64 linhas amostradas e 22 toques contados, com várias passagens de espera e um pássaro perto do fundo da arena. Os JPGs eram comprimidos e gravados na mesma thread que analisa as imagens, podendo reduzir a frequência de decisão.
+
+- Move JPEG e CSV para uma thread de IO separada da MediaProjection; só copia pixels de vez em quando.
+- Registra decisões a cada ~120ms e imagens espaçadas a cada ~420ms, até 70 arquivos.
+- gestos.csv registra ENVIADO, CONCLUIDO e CANCELADO com o horário real relativo à sessão.
+- Atualizações de interface no máximo a cada 430ms para reduzir cargas desnecessárias.
+- Preserva integralmente a física da v1.5 e o modo CONTÍNUO: **não promete pontuação maior sem teste real**.
+- Exporte a caixa-preta depois de parar para comparar o controle visual com os gestos reais.

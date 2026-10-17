@@ -2,114 +2,152 @@ package br.com.poderazul.spikesbot;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
+import android.os.Handler;
+import android.os.HandlerThread;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Locale;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.*;
 
-/**
- * Black-box diagnostic, not an MP4 recorder.
- * Records ONLY frames presented by SpikesService.acceptLiveFrame() while the
- * original game is foreground. No internet permission, no background upload.
- */
+/** Separate disk IO from the Android screen capture/vision worker. */
 final class FlightRecorder {
-    private static final int MAX_FRAMES = 70;
-    private static final long MIN_INTERVAL_MS = 280L;
-    private static long currentSession = -1;
-    private static long lastSavedAt = 0;
-    private FlightRecorder() {}
+    private static final int MAX_IMAGES=70;
+    private static final long IMAGE_MS=420, DECISION_MS=120;
+    private static final AtomicInteger queued=new AtomicInteger();
+    private static HandlerThread thread;
+    private static Handler writer;
+    private static long session=-1, lastDecision=0, lastImage=0;
+    private FlightRecorder(){}
 
-    private static File directory(Context context) {
-        return new File(context.getFilesDir(), "flight_debug");
+    private static File folder(Context c){return new File(c.getFilesDir(),"flight_debug");}
+    private static void init(){
+        if(writer!=null)return;
+        thread=new HandlerThread("SpikesBot-blackbox-io");
+        thread.start();
+        writer=new Handler(thread.getLooper());
     }
-
-    private static String csvField(String input) {
-        String s = input == null ? "" : input.replace("\"", "\"\"");
-        return "\"" + s.replace("\n", " ").replace("\r", " ") + "\"";
+    private static void enqueue(Runnable job){
+        if(queued.get()>=18)return;
+        queued.incrementAndGet();
+        if(!writer.post(()->{
+            try{job.run();}finally{queued.decrementAndGet();}
+        }))queued.decrementAndGet();
     }
-
-    static synchronized void capture(Context context, Bitmap frame,
-                                     VisionEngine.Frame observation,
-                                     long now, long session, int touchCount) {
-        // The diagnostic must NEVER save another app's screen or a
-        // transition away from the gameplay. Only valid game frames.
-        if (session <= 0 || !observation.boardFound || !observation.birdFound ||
-                now - lastSavedAt < MIN_INTERVAL_MS) return;
-        File dir = directory(context);
-        try {
-            if (session != currentSession) {
-                File[] previous = dir.listFiles();
-                if (previous != null) for (File f : previous) f.delete();
-                currentSession = session;
-                lastSavedAt = 0;
-            }
-            if (!dir.exists() && !dir.mkdirs()) return;
-            lastSavedAt = now;
-            long elapsed = Math.max(0, now - session);
-            String base = String.format(Locale.US, "quadro_%010d.jpg", elapsed);
-            File image = new File(dir, base);
-            try (FileOutputStream output = new FileOutputStream(image)) {
-                frame.compress(Bitmap.CompressFormat.JPEG, 52, output);
-            }
-            File csv = new File(dir, "decisoes.csv");
-            boolean newFile = !csv.exists();
-            try (FileWriter out = new FileWriter(csv, true)) {
-                if (newFile) {
-                    out.write("tempo_ms;campo;passaro;pular;bird_x;bird_y;alvo_y;toques;decisao\n");
+    private static void newSession(Context c,long id){
+        init();
+        if(session==id)return;
+        session=id;lastDecision=0;lastImage=0;
+        Context app=c.getApplicationContext();
+        enqueue(()->{
+            File[] f=folder(app).listFiles();
+            if(f!=null)for(File item:f)if(item.isFile())item.delete();
+        });
+    }
+    private static String q(String s){
+        if(s==null)return "\"\"";
+        return "\""+s.replace("\"","\"\"").replace("\n"," ").replace("\r"," ")+"\"";
+    }
+    static synchronized void capture(Context context,Bitmap frame,VisionEngine.Frame state,
+                                      long now,long id,int touches) {
+        if(id<=0||!state.boardFound||!state.birdFound)return;
+        newSession(context,id);
+        if(now-lastDecision<DECISION_MS)return;
+        lastDecision=now;
+        boolean imageDue=now-lastImage>=IMAGE_MS;
+        if(imageDue)lastImage=now;
+        if(queued.get()>=16)return;
+        // Pixel copy is cheap; JPEG compression and disk writes are off-thread.
+        Bitmap jpg=imageDue?frame.copy(Bitmap.Config.ARGB_8888,false):null;
+        long t=Math.max(0,now-id);
+        String line=t+";true;true;"+state.jump+";"+(int)state.birdX+";"+
+                (int)state.birdY+";"+(int)state.targetY+";"+touches+";"+
+                q(state.description)+"\n";
+        Context app=context.getApplicationContext();
+        enqueue(()->{
+            try{
+                File dir=folder(app);
+                if(!dir.exists()&&!dir.mkdirs())return;
+                File csv=new File(dir,"decisoes.csv");
+                boolean first=!csv.exists();
+                try(FileWriter out=new FileWriter(csv,true)){
+                    if(first)out.write("tempo_ms;campo;passaro;pular;bird_x;bird_y;alvo_y;toques;decisao\n");
+                    out.write(line);
                 }
-                out.write(elapsed + ";" + observation.boardFound + ";" +
-                        observation.birdFound + ";" + observation.jump + ";" +
-                        (int) observation.birdX + ";" + (int) observation.birdY + ";" +
-                        (int) observation.targetY + ";" + touchCount + ";" +
-                        csvField(observation.description) + "\n");
+                if(jpg!=null){
+                    File f=new File(dir,String.format(Locale.US,"quadro_%010d.jpg",t));
+                    try(FileOutputStream o=new FileOutputStream(f)){
+                        jpg.compress(Bitmap.CompressFormat.JPEG,52,o);
+                    }
+                    File[] all=dir.listFiles((d,n)->n.endsWith(".jpg"));
+                    if(all!=null&&all.length>MAX_IMAGES){
+                        Arrays.sort(all,Comparator.comparing(File::getName));
+                        for(int i=0;i<all.length-MAX_IMAGES;i++)all[i].delete();
+                    }
+                }
+            }catch(IOException ignored) {
+            }finally{
+                if(jpg!=null&&!jpg.isRecycled())jpg.recycle();
             }
-            File[] shots = dir.listFiles((root, name) -> name.endsWith(".jpg"));
-            if (shots != null && shots.length > MAX_FRAMES) {
-                Arrays.sort(shots, Comparator.comparing(File::getName));
-                for (int i = 0; i < shots.length - MAX_FRAMES; i++) shots[i].delete();
+        });
+    }
+    static synchronized void gesture(Context c,long now,long id,String kind){
+        if(id<=0)return;
+        newSession(c,id);
+        Context app=c.getApplicationContext();
+        String row=Math.max(0,now-id)+";"+kind+"\n";
+        enqueue(()->{
+            try{
+                File dir=folder(app);
+                if(!dir.exists()&&!dir.mkdirs())return;
+                File f=new File(dir,"gestos.csv");
+                boolean first=!f.exists();
+                try(FileWriter out=new FileWriter(f,true)){
+                    if(first)out.write("tempo_ms;evento\n");
+                    out.write(row);
+                }
+            }catch(IOException ignored){}
+        });
+    }
+    static File export(Context c)throws IOException {
+        Handler h;
+        synchronized(FlightRecorder.class){h=writer;}
+        if(h!=null){
+            CountDownLatch done=new CountDownLatch(1);
+            h.post(done::countDown);
+            try{
+                if(!done.await(3,TimeUnit.SECONDS))
+                    throw new IOException("Arquivos ainda sendo escritos; tente novamente");
+            }catch(InterruptedException e){
+                Thread.currentThread().interrupt();
+                throw new IOException("Operação interrompida",e);
             }
-        } catch (IOException ignored) {
-            // Never let a diagnostic file interrupt the actual pilot.
         }
-    }
-
-    static synchronized File export(Context context) throws IOException {
-        File dir = directory(context);
-        File[] files = dir.listFiles((root, name) ->
-                name.endsWith(".jpg") || name.equals("decisoes.csv"));
-        if (files == null || files.length == 0) return null;
-        File shared = new File(context.getCacheDir(), "shared_debug");
-        if (!shared.exists() && !shared.mkdirs()) throw new IOException("Diretório temporário");
-        File zipFile = new File(shared, "SpikesBot-caixa-preta.zip");
-        try (ZipOutputStream zip = new ZipOutputStream(
-                new BufferedOutputStream(new FileOutputStream(zipFile)))) {
-            byte[] buffer = new byte[8192];
-            String notice = "SpikesBot - Caixa-preta de teste\n" +
-                    "Imagens JPEG espaçadas, NÃO vídeo MP4.\n" +
-                    "decisoes.csv: tempo em ms desde o início da sessão; " +
-                    "pássaro, campo, comando de subir e altura alvo.\n" +
-                    "As imagens podem conter notificações sobrepostas: revise antes de compartilhar.\n" +
-                    "O app não envia nada sozinho.\n";
-            zip.putNextEntry(new ZipEntry("LEIA-ME.txt"));
-            zip.write(notice.getBytes(StandardCharsets.UTF_8));
-            zip.closeEntry();
-            Arrays.sort(files, Comparator.comparing(File::getName));
-            for (File file : files) {
-                zip.putNextEntry(new ZipEntry(file.getName()));
-                try (FileInputStream in = new FileInputStream(file)) {
-                    int n;
-                    while ((n = in.read(buffer)) != -1) zip.write(buffer, 0, n);
+        File[] items=folder(c).listFiles((d,n)->n.endsWith(".jpg")||
+                n.equals("decisoes.csv")||n.equals("gestos.csv"));
+        if(items==null||items.length==0)return null;
+        File target=new File(c.getCacheDir(),"shared_debug");
+        if(!target.exists()&&!target.mkdirs())throw new IOException("Pasta temporária");
+        File zipFile=new File(target,"SpikesBot-caixa-preta.zip");
+        try(ZipOutputStream out=new ZipOutputStream(
+                new BufferedOutputStream(new FileOutputStream(zipFile)))){
+            String info="SpikesBot v1.9\n"+
+                    "decisoes.csv: recomendacoes visuais aproximadas a cada 120 ms\n"+
+                    "gestos.csv: gestos enviados/concluidos/cancelados pelo Android\n"+
+                    "JPEG: quadros recentes. Tudo fica no celular ate compartilhar.\n";
+            out.putNextEntry(new ZipEntry("LEIA-ME.txt"));
+            out.write(info.getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+            Arrays.sort(items,Comparator.comparing(File::getName));
+            byte[] buffer=new byte[8192];
+            for(File file:items){
+                out.putNextEntry(new ZipEntry(file.getName()));
+                try(FileInputStream in=new FileInputStream(file)){
+                    int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
                 }
-                zip.closeEntry();
+                out.closeEntry();
             }
         }
         return zipFile;

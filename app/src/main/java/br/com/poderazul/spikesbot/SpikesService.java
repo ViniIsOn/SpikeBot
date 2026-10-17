@@ -55,6 +55,7 @@ public class SpikesService extends AccessibilityService {
     private long lastSessionId = -1;
     private volatile long latestProcessedLiveFrameAt = 0;
     private int frames = 0;
+    private long lastStatusUpdateAt = 0;
     private boolean wasActive = false;
 
     @Override protected void onServiceConnected() {
@@ -385,7 +386,9 @@ public class SpikesService extends AccessibilityService {
             visionFlapSuggested = false;
         }
         lastVisionReason = result.description;
-        if (frames % 2 == 0 || !valid) {
+        long t = SystemClock.uptimeMillis();
+        if (t - lastStatusUpdateAt >= 430L) {
+            lastStatusUpdateAt = t;
             Config.status(this, result.description);
             updateVisualStats(prefs);
         }
@@ -412,6 +415,13 @@ public class SpikesService extends AccessibilityService {
                 "\nDecisão: " + lastVisionReason).apply();
     }
 
+    private void recordGesture(String name) {
+        SharedPreferences p=Config.get(this);
+        if(p.getInt(Config.MODE,1)!=1)return;
+        FlightRecorder.gesture(this,SystemClock.uptimeMillis(),
+                p.getLong(Config.SESSION_START,0L),name);
+    }
+
     private void sendTap(boolean manualTest) {
         if (destroyed || gesturePending || !Config.PACKAGE.equals(activePackage())) {
             Config.status(this, "Toque não enviado: jogo não está ativo");
@@ -430,12 +440,14 @@ public class SpikesService extends AccessibilityService {
                 @Override public void onCompleted(GestureDescription description) {
                     gesturePending = false;
                     gestureCompletions++;
+                    recordGesture("CONCLUIDO");
                     if (manualTest) Config.status(SpikesService.this,
                             "TESTE: toque enviado ao jogo. O pássaro reagiu?");
                 }
                 @Override public void onCancelled(GestureDescription description) {
                     gesturePending = false;
                     gestureCancels++;
+                    recordGesture("CANCELADO");
                     lastVisionReason = "Gesto cancelado pelo Android";
                     Config.status(SpikesService.this, lastVisionReason);
                 }
@@ -445,6 +457,7 @@ public class SpikesService extends AccessibilityService {
         }
         if (submitted) {
             lastGesture = SystemClock.uptimeMillis();
+            recordGesture("ENVIADO");
             Config.get(this).edit().putInt(Config.TAPS,
                     Config.get(this).getInt(Config.TAPS, 0) + 1).apply();
             Handler w = worker;
