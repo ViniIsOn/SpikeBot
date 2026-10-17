@@ -112,7 +112,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("VISÃO AO VIVO v1.1: prevê a altura do pássaro quando chegar na parede seguinte, procura uma passagem sem espinhos e controla a subida e queda. Não usa número fixo de toques. Teste primeiro sem doces.", 12, MUTED, false));
+        control.addView(label("VISÃO AO VIVO v1.3: compara a trajetória com e sem pulo usando a física estimada do seu próprio diagnóstico. Escolhe a passagem da próxima parede considerando teto e chão. Para calibrar, desligue os doces.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);

@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.2 beta 🐦
+# SpikesBot Kwai • v1.3 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -198,3 +198,18 @@ Quando a MediaProjection está ativa, gravar simultaneamente com o gravador de t
 - O algoritmo de voo da v1.1 fica preservado para medirmos, em vez de adivinhar novos parâmetros. Os 5 pontos observados ainda não demonstram uma melhora de sobrevivência.
 
 Teste: escolha VISÃO AO VIVO + cor Verde + SEM doces. Jogue até falhar. Pare o bot, toque em COMPARTILHAR DIAGNÓSTICO e envie o ZIP aqui. A análise de sequências de quadros com timestamps permitirá ajustar impulso/gravitidade e detecção de espinhos com mais fundamento.
+
+## v1.3 — física corrigida com o CSV enviado pelo usuário
+
+Os 80 registros temporais, 9 imagens e a caixa-preta mostram que o modo VISÃO ao vivo já consegue enviar gestos contínuos, mas ainda faz previsões ruins de trajetória e às vezes termina a partida após poucos pontos. A coluna `decisao` em diversos registros contém `• doce`, portanto o modo de doces estava interferindo na escolha de alvo.
+
+- **Gravidade aferida com o histórico**: 9 trechos de 3 capturas sem toque adicional indicaram aproximadamente 366–585 pixels/s² na imagem redimensionada, com mediana ~449; a constante anterior era ~1280 pixels/s². Nova aproximação: ~0.98 × altura da imagem por segundo ao quadrado (~475 pixels/s²).
+- Corrigida também a estimativa de velocidade horizontal padrão (antes ~147 px/s; o registro mostra cruzamentos frequentemente entre 350–450 px/s), reduzindo grandes extrapolações de queda por tempos de voo irreais.
+- Simula duas hipóteses a cada frame (esperar e tocar agora), verifica caminho ao longo da travessia e escolhe o corredor livre da próxima parede que exige menor ajuste em relação à altura prevista.
+- Teto e chão geram penalidade alta em ambos os cenários; evita novos pulos quando já sobe rápido ou está muito perto do teto.
+- O programa não controla o número de toques por sequência. Há uma única limitação de frequência de envio no AccessibilityService.
+- O piloto do modo CONTÍNUO e a caixa-preta são preservados. Modo DOCES permanece opcional; **para calibrar, desligue doces**.
+- Diagnóstico informa as duas previsões de chegada e o tempo aproximado até a parede. Não é garantida a sobrevivência: a estimativa do impulso do pulo não está completamente aferida com os dados espaçados.
+
+### Teste específico
+No modo VISÃO AO VIVO, escolha cor Verde, SEM DOCES e margem 65%. Teste apenas uma ou duas partidas e depois envie o próximo ZIP da caixa-preta (ou CSV e os quadros próximos da derrota). Não compartilhe outros conteúdos capturados se houver notificações sensíveis.

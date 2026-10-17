@@ -50,137 +50,179 @@ final class VisionEngine {
      * arrive without another flap. Works on resized 216px-wide frames.
      * Uses NO fixed pattern or preset number of taps.
      */
+    // Physics measured from the user's 33-second CSV:
+    // gravity estimates ~366..585 resized pixels/s^2, median about 449.
+    // The previous 2.65 * screenHeight (~1280) greatly overpredicted falls.
+    private static final double GRAVITY_PER_HEIGHT = 0.98;
+    private static final double FLAP_SPEED_PER_HEIGHT = -0.41;
+
     synchronized Frame analyze(Bitmap bitmap, int birdColor, boolean collectCandy,
                                int safety, int rate, long timestamp) {
-        final int w=bitmap.getWidth(), h=bitmap.getHeight();
-        if(w<100 || h<200)
+        final int w=bitmap.getWidth(),h=bitmap.getHeight();
+        if(w<100||h<200)
             return new Frame(false,false,false,"Quadro pequeno demais",0,0,0);
+        int[] colors=new int[w*h];
+        bitmap.getPixels(colors,0,w,0,0,w,h);
 
-        int[] pixels=new int[w*h];
-        bitmap.getPixels(pixels,0,w,0,0,w,h);
-        final int atX=(int)(w*.86);
-        final int ceilingL=brightness(pixels[(int)(h*.11)*w+atX]);
-        final int upperFieldL=brightness(pixels[(int)(h*.25)*w+atX]);
-        final int lowerFieldL=brightness(pixels[(int)(h*.79)*w+atX]);
-        final int floorL=brightness(pixels[(int)(h*.92)*w+atX]);
-        // Check the actual board, not the screenshot-edit toolbar / score.
-        final boolean roofSeen=upperFieldL-ceilingL>45;
-        final boolean floorSeen=lowerFieldL-floorL>45;
+        int atX=(int)(w*.86);
+        int roofDark=brightness(colors[(int)(h*.11)*w+atX]);
+        int roofLight=brightness(colors[(int)(h*.25)*w+atX]);
+        int groundLight=brightness(colors[(int)(h*.79)*w+atX]);
+        int groundDark=brightness(colors[(int)(h*.92)*w+atX]);
+        boolean roofSeen=roofLight-roofDark>45;
+        boolean floorSeen=groundLight-groundDark>45;
 
-        final int scanTop=(int)(h*.185), scanBottom=(int)(h*.81);
-        int[] left=new int[h], right=new int[h];
+        int scanTop=(int)(h*.185),scanBottom=(int)(h*.81);
+        int[] left=new int[h],right=new int[h];
         int leftCount=0,rightCount=0;
         int leftBgX=(int)(w*.13),rightBgX=(int)(w*.87);
         for(int y=scanTop;y<scanBottom;y++){
-            int bgLeft=brightness(pixels[y*w+leftBgX]);
-            int bgRight=brightness(pixels[y*w+rightBgX]);
-            boolean l=isSpikeRow(pixels,w,y,(int)(w*.01),(int)(w*.10),1,bgLeft);
-            boolean r=isSpikeRow(pixels,w,y,(int)(w*.90),(int)(w*.99),1,bgRight);
-            if(l){left[y]=1;leftCount++;}
-            if(r){right[y]=1;rightCount++;}
+            int leftBg=brightness(colors[y*w+leftBgX]);
+            int rightBg=brightness(colors[y*w+rightBgX]);
+            boolean L=isSpikeRow(colors,w,y,(int)(w*.01),(int)(w*.10),1,leftBg);
+            boolean R=isSpikeRow(colors,w,y,(int)(w*.90),(int)(w*.99),1,rightBg);
+            left[y]=L?1:0;right[y]=R?1:0;
+            if(L)leftCount++;
+            if(R)rightCount++;
         }
-        final boolean sidesDetected=leftCount+rightCount>=Math.max(8,(scanBottom-scanTop)/38);
-        final boolean stageDetected=(roofSeen && floorSeen)||sidesDetected;
-        if(!stageDetected)
-            return new Frame(false,false,false,"Arena nao reconhecida",0,0,0);
+        boolean walls=leftCount+rightCount>=Math.max(8,(scanBottom-scanTop)/38);
+        boolean stage=(roofSeen&&floorSeen)||walls;
+        if(!stage)
+            return new Frame(false,false,false,"Campo nao reconhecido",0,0,0);
 
-        Blob bird=findBlob(pixels,w,h,birdColor,true);
-        if(bird==null && birdColor!=3)bird=findBlob(pixels,w,h,3,true);
+        Blob bird=findBlob(colors,w,h,birdColor,true);
+        if(bird==null&&birdColor!=3)bird=findBlob(colors,w,h,3,true);
         if(bird==null){
-            if(timestamp-lastSeenAt>450){lastX=-1;lastY=-1;vx=vy=0;}
-            return new Frame(true,false,false,"Perdi o passaro • selecione Verde",0,0,0);
+            if(timestamp-lastSeenAt>500){lastX=-1;lastY=-1;vx=vy=0;}
+            return new Frame(true,false,false,"Passaro nao detectado • selecione Verde",0,0,0);
         }
-        long seenBefore=lastSeenAt;
-        double dt=(timestamp-seenBefore)/1000.0;
-        boolean stableSample=seenBefore>0 && dt>=.035 && dt<=.32;
-        if(stableSample){
-            double newVx=(bird.x-lastX)/dt;
-            double newVy=(bird.y-lastY)/dt;
-            // A large jump is likely a tracking glitch or score overlay.
-            if(Math.abs(newVx)<w*7 && Math.abs(newVy)<h*7){
-                vx=vx*.34+newVx*.66;
-                vy=vy*.34+newVy*.66;
-                if(newVx>w*.14)direction=1;
-                else if(newVx< -w*.14)direction=-1;
-            }else{
-                stableSample=false;vx=vy=0;
-            }
+        long last=lastSeenAt;
+        double dt=(timestamp-last)/1000.0;
+        boolean reliableVelocity=last>0&&dt>=.035&&dt<=.35;
+        if(reliableVelocity){
+            double observedX=(bird.x-lastX)/dt;
+            double observedY=(bird.y-lastY)/dt;
+            if(Math.abs(observedX)<w*7&&Math.abs(observedY)<h*7){
+                vx=vx*.33+observedX*.67;
+                vy=vy*.33+observedY*.67;
+                if(observedX>w*.14)direction=1;
+                else if(observedX< -w*.14)direction=-1;
+            } else reliableVelocity=false;
         }
-        if(!stableSample) {
-            vx=0;vy=0;
-            if(seenBefore==0 || dt>.4)direction=bird.x<w*.5?1:-1;
+        if(!reliableVelocity){
+            vx=vy=0;
+            if(last==0||dt>.4)direction=bird.x<w*.50?1:-1;
         }
         if(bird.x<w*.10)direction=1;
         if(bird.x>w*.90)direction=-1;
         lastX=bird.x;lastY=bird.y;lastSeenAt=timestamp;
 
-        // Only the wall the bird is approaching matters for the next bounce.
         int[] wall=direction>0?right:left;
         int wallCount=direction>0?rightCount:leftCount;
-        int clearance=Math.max(10,(int)(h*(.025+Math.max(0,Math.min(100,safety))*.00015)));
-        int topLimit=(int)(h*.238),bottomLimit=(int)(h*.765);
-        int center=(int)(h*.472);
+        double gravity=h*GRAVITY_PER_HEIGHT;
+        double impulse=h*FLAP_SPEED_PER_HEIGHT;
+        // Horizontal speed from the CSV is commonly 350-450 px/s,
+        // on a 216 px-wide reduced frame. Do not assume 147px/s as before.
+        double speed=reliableVelocity?Math.abs(vx):0;
+        speed=Math.max(w*1.6,Math.min(w*2.6,speed));
+        double distance=direction>0?(w*.92-bird.x):(bird.x-w*.08);
+        double eta=Math.max(.035,Math.min(.60,distance/speed));
 
-        // Horizontal time to collision is estimated from consecutive frames.
-        // When speed is unknown, use a conservative one-half screen per second.
-        double horizontalSpeed=Math.max(Math.abs(vx),w*.68);
-        double distance=direction>0 ? (w*.94-bird.x):(bird.x-w*.06);
-        double wallTime=Math.max(.05,Math.min(.70,distance/horizontalSpeed));
-        // Coarse gravity model on the 216 x ~483 field. Predicted Y is where
-        // the bird would be if we did NOT flap again. This is an estimate,
-        // NOT a proven exact model of Ketchapp's physics.
-        double gravity=h*2.65;
-        double predictedWallY=bird.y+vy*wallTime+.5*gravity*wallTime*wallTime;
-        predictedWallY=Math.max(topLimit,Math.min(bottomLimit,predictedWallY));
-        double lookahead=.18;
-        double soonY=bird.y+vy*lookahead+.5*gravity*lookahead*lookahead;
-        Blob candy=collectCandy?findBlob(pixels,w,h,6,false):null;
-        boolean candyAhead=candy!=null &&
-                ((direction>0 && candy.x>bird.x+w*.045) ||
-                 (direction<0 && candy.x<bird.x-w*.045));
+        double measuredVy=reliableVelocity?vy:0;
+        // A tap may already have been dispatched before the newest image
+        // visibly responds. Model this short transitional upward impulse.
+        long sinceFlap=timestamp-lastTapAt;
+        if(lastTapAt>0&&sinceFlap>=0&&sinceFlap<135)
+            measuredVy=Math.min(measuredVy,impulse+gravity*(sinceFlap/1000.0));
 
-        int[] sums=new int[h+1];
-        for(int i=0;i<h;i++)sums[i+1]=sums[i]+wall[i];
-        double bestScore=Double.POSITIVE_INFINITY;
-        int target=center;
-        for(int y=topLimit;y<bottomLimit;y+=2){
-            int from=Math.max(scanTop,y-clearance);
-            int to=Math.min(scanBottom,y+clearance+1);
-            if(sums[to]-sums[from]>0)continue;
-            // Center keeps a safe distance from spikes on floor / ceiling.
-            // The predicted arrival favors reachable gaps on the next wall.
-            double cost=Math.abs(y-center)*.80+
-                        Math.abs(y-predictedWallY)*.44;
-            if(candyAhead)cost+=Math.abs(y-candy.y)*.24;
-            if(cost<bestScore){bestScore=cost;target=y;}
-        }
-        if(!Double.isFinite(bestScore))
+        int top=(int)(h*.235),bottom=(int)(h*.765);
+        int radius=Math.max(12,(int)(h*(.022+Math.max(0,Math.min(100,safety))*.00014)));
+        int center=(int)(h*.47);
+        int[] prefix=new int[h+1];
+        for(int y=0;y<h;y++)prefix[y+1]=prefix[y]+wall[y];
+
+        Blob candy=collectCandy?findBlob(colors,w,h,6,false):null;
+        boolean candyAhead=candy!=null&&(
+                (direction>0&&candy.x>bird.x+w*.04) ||
+                (direction<0&&candy.x<bird.x-w*.04));
+        // Calculate complete candidate trajectories, not "tap twice then wait".
+        double noTapAtWall=bird.y+measuredVy*eta+.5*gravity*eta*eta;
+        double tapAtWall=bird.y+impulse*eta+.5*gravity*eta*eta;
+        double noTapPenalty=pathPenalty(bird.y,measuredVy,gravity,eta,top,bottom);
+        double tapPenalty=pathPenalty(bird.y,impulse,gravity,eta,top,bottom);
+        double candyY=candyAhead?candy.y:Double.NaN;
+        Corridor noTapCorridor=findCorridor(prefix,top,bottom,radius,scanTop,scanBottom,
+                noTapAtWall,center,candyY);
+        Corridor tapCorridor=findCorridor(prefix,top,bottom,radius,scanTop,scanBottom,
+                tapAtWall,center,candyY);
+        if(!noTapCorridor.found && !tapCorridor.found)
             return new Frame(true,true,false,
-                    "Sem corredor seguro: parede "+(direction>0?"D":"E"),
+                    "Pausa: sem corredor reconhecivel na parede "+(direction>0?"D":"E"),
                     bird.x,bird.y,center);
+        double scoreWait=noTapPenalty+noTapCorridor.cost;
+        double scoreTap=tapPenalty+tapCorridor.cost+9.0; // discourage needless flaps
+        boolean nearFloor=bird.y>bottom-h*.08;
+        boolean risingFast=measuredVy< -h*.12;
+        boolean ceilingRisk=bird.y<top+h*.045;
+        boolean needsTap=scoreTap+8.0<scoreWait;
+        // When falling near the floor, give the impulse time to act
+        // without waiting for a new wall to spawn spikes.
+        double soonY=bird.y+measuredVy*.14+.5*gravity*.14*.14;
+        if(nearFloor||soonY>bottom-h*.045)needsTap=tapPenalty<noTapPenalty;
+        if(ceilingRisk||risingFast)needsTap=false;
+        // If no safe tap corridor is identifiable, don't invent one.
+        if(!tapCorridor.found)needsTap=false;
 
-        // A flap must be predicted, not issued every N frames:
-        // no extra tap when rising quickly or near the ceiling; trigger while
-        // falling BEFORE the projected arrival falls below the selected gap.
-        boolean risingFast=stableSample && vy< -h*.13;
-        boolean atHighAltitude=bird.y<topLimit+h*.030 ||
-                             (bird.y<topLimit+h*.09 && vy< -h*.18);
-        boolean nearFloor=bird.y>bottomLimit-h*.083;
-        boolean predictedDrop=soonY>target-h*.04;
-        boolean wallDrop=wallTime<.40 && predictedWallY>target+h*.08;
-        boolean jump=!atHighAltitude &&
-                (nearFloor || (!risingFast && (predictedDrop || wallDrop)));
-        // Only a live positive recommendation is acted on, then rate-limited
-        // by SpikesService (the decision engine has no independent cooldown).
-        String state=risingFast?"subindo":vy>h*.05?"caindo":"no apice";
-        String reason="VISÃO "+(jump?"SUBIR":"AGUARDAR")+
-                " • "+state+
+        int target=needsTap?tapCorridor.target:noTapCorridor.target;
+        if(target<0)target=center;
+        String decision="VISÃO "+(needsTap?"SUBIR":"AGUARDAR")+
                 " • parede "+(direction>0?"D":"E")+
                 " espinhos="+wallCount+
                 " • Y "+(int)bird.y+" alvo "+target+
-                " • chegada "+(int)predictedWallY+
+                " • chegada sem toque "+(int)noTapAtWall+
+                " / com toque "+(int)tapAtWall+
+                " • t="+(int)(eta*1000)+"ms"+
                 (candyAhead?" • doce":"");
-        return new Frame(true,true,jump,reason,bird.x,bird.y,target);
+        return new Frame(true,true,needsTap,decision,bird.x,bird.y,target);
+    }
+
+    private static final class Corridor {
+        final boolean found;
+        final int target;
+        final double cost;
+        Corridor(boolean found,int target,double cost) {
+            this.found=found;this.target=target;this.cost=cost;
+        }
+    }
+
+    private static Corridor findCorridor(int[] prefix,int top,int bottom,int radius,
+                                          int scanTop,int scanBottom,double projected,
+                                          int center,double candyY) {
+        int best=-1;double score=Double.POSITIVE_INFINITY;
+        for(int y=top;y<=bottom;y+=2){
+            int lo=Math.max(scanTop,y-radius);
+            int hi=Math.min(scanBottom,y+radius+1);
+            if(prefix[hi]-prefix[lo]>0)continue;
+            double difference=Math.abs(y-projected);
+            double cost=difference*2.1 + Math.abs(y-center)*.16;
+            if(!Double.isNaN(candyY))
+                cost+=Math.abs(y-candyY)*.10;
+            if(cost<score){score=cost;best=y;}
+        }
+        return new Corridor(best>=0,best,score);
+    }
+
+    private static double pathPenalty(double y,double startSpeed,double gravity,
+                                      double endTime,int top,int bottom) {
+        double penalty=0;
+        // Check roof/floor risk DURING the crossing, not only at impact.
+        for(int i=1;i<=5;i++){
+            double t=endTime*i/5.0;
+            double position=y+startSpeed*t+.5*gravity*t*t;
+            if(position<top+8)penalty+=200+(top+8-position)*6;
+            if(position>bottom-8)penalty+=200+(position-(bottom-8))*6;
+        }
+        return penalty;
     }
 
     private static boolean isSpikeRow(int[] pix, int w, int y, int x0, int x1,
