@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.4 beta 🐦
+# SpikesBot Kwai • v0.5 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -88,3 +88,19 @@ Esta versão tem compilação automatizada, mas ainda precisa de testes em um di
 2. Pressione **INICIAR BOT AUTOMÁTICO**, abra/inicie manualmente a partida.
 3. Os toques começam após cerca de 4 segundos e prosseguem durante até 60 segundos, somente no jogo.
 4. Use **PARAR O BOT** ao terminar. Se o passarinho morrer, altere o intervalo ou mude para VISÃO e compartilhe capturas/status para calibrar, sem esperar acertos perfeitos.
+
+## v0.5 — calibração inicial com capturas reais de jogo
+
+- Quatro capturas reais do jogo (686×1536) mostraram um pássaro **verde** perto das bordas e espinhos triangulares **estreitos** nas paredes.
+- O detector anterior procurava paredes escuras numa faixa muito larga (3–20% e 80–97%). Agora procura triângulos nas bordas (1–9% e 91–99%) com limiar adaptativo relativo ao corredor.
+- A busca do pássaro foi ampliada de 18–82% para **2–98% da largura** e tem tentativa de reconhecimento do verde caso a cor escolhida não encontre pássaro.
+- A análise de obstáculos limita o campo vertical até ~70% da altura para evitar que a sobreposição de edição/captura do Android, vista nos screenshots, vire um espinho falso.
+- Intervalo inicial entre capturas da visão reduzido de 260 para 230ms (sem prometer precisão em partidas rápidas). **CONTÍNUO permanece inalterado**.
+- **Validação:** os quatro screenshots foram analisados offline quanto à presença de áreas verdes do pássaro e contornos laterais escuros. Isso não confirma previsão do movimento nem sobrevivência no jogo real.
+
+### Teste em aparelho
+1. Em **Tipo de controle**, escolha **VISÃO** (não CONTÍNUO).
+2. Em **Cor atual do pássaro**, escolha **Verde**.
+3. Use **INICIAR BOT AUTOMÁTICO** e inicie uma partida.
+4. Depois de parar, veja **Capturas / campo / pássaro / toques** no status. Se não funcionar, envie esses números e um vídeo curto da partida.
+5. Para pausar completamente, pare o bot e desative a permissão de acessibilidade quando terminar.

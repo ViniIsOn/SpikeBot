@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        look.addView(label("Ajuste conforme a skin usada. O bot reconhece a cor pela imagem, sem acessar arquivos do jogo.", 12, MUTED, false));
+        look.addView(label("Nas capturas enviadas, o pássaro é VERDE. Selecione Verde para o modo VISÃO. O modo contínuo não depende da cor.", 12, MUTED, false));
 
         LinearLayout control = card(screen);
         control.addView(label("TIPO DE CONTROLE", 12, CYAN, true));
@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("CONTÍNUO envia vários toques por 60 segundos, mas NÃO evita espinhos e pode tocar menus. VISÃO usa capturas e pode deixar de tocar se não reconhecer o campo.", 12, MUTED, false));
+        control.addView(label("CONTÍNUO repete toques por 60 segundos, sem evitar espinhos. VISÃO (beta) analisa as capturas e só envia toques quando reconhece o pássaro e o campo. Para as capturas enviadas, selecione a cor VERDE.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);

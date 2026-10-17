@@ -23,7 +23,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
  */
 public class SpikesService extends AccessibilityService {
     private static final String TAG = "SpikesBot";
-    private static final long CAPTURE_GAP_MS = 260;
+    private static final long CAPTURE_GAP_MS = 230;
     private static final long TIMED_START_DELAY_MS = 4000;
     private static final long TIMED_SESSION_LIMIT_MS = 60000;
     private final Handler main = new Handler(Looper.getMainLooper());

@@ -56,15 +56,20 @@ final class VisionEngine {
 
         int[] spikeL = new int[h];
         int[] spikeR = new int[h];
-        final int minY = (int) (0.14 * h), maxY = (int) (0.84 * h);
-        final int stride = Math.max(1, w / 65);
+        // Calibrado com 4 capturas 686x1536 da versão atual do jogo.
+        // A barra de captura do Android aparece abaixo de ~0.71h em algumas
+        // imagens: ignoramos essa parte para não classificar a interface como espinhos.
+        final int minY = (int) (0.17 * h), maxY = (int) (0.70 * h);
+        final int stride = 1;
         int spikeEvidence = 0;
 
         for (int y = minY; y < maxY; y++) {
-            int bg = colors[y * w + w / 2];
-            int bgLuminance = brightness(bg);
-            boolean left = isSpikeRow(colors, w, y, (int)(w * .03), (int)(w * .20), stride, bgLuminance);
-            boolean right = isSpikeRow(colors, w, y, (int)(w * .80), (int)(w * .97), stride, bgLuminance);
+            // Amostrar o fundo no corredor e os triângulos nos 9% externos.
+            // O HUD branco do placar fica no meio e não serve de fundo.
+            int bgLuminance = (brightness(colors[y * w + (int)(w * .12)]) +
+                    brightness(colors[y * w + (int)(w * .88)])) / 2;
+            boolean left = isSpikeRow(colors, w, y, (int)(w * .01), (int)(w * .09), stride, bgLuminance);
+            boolean right = isSpikeRow(colors, w, y, (int)(w * .91), (int)(w * .99), stride, bgLuminance);
             spikeL[y] = left ? 1 : 0;
             spikeR[y] = right ? 1 : 0;
             if (left || right) spikeEvidence++;
@@ -77,8 +82,11 @@ final class VisionEngine {
         }
 
         Blob bird = findBlob(colors, w, h, birdColor, true);
+        // A skin enviada é verde. A alternativa automática ajuda quando
+        // uma configuração antiga deixou "rosa" selecionada por padrão.
+        if (bird == null && birdColor != 3) bird = findBlob(colors, w, h, 3, true);
         if (bird == null) {
-            return new Frame(true, false, false, "Pássaro não encontrado; confira a cor escolhida", 0, 0, 0);
+            return new Frame(true, false, false, "Pássaro não encontrado. Escolha Verde na cor do pássaro.", 0, 0, 0);
         }
 
         double dt = (timestamp - lastSeenAt) / 1000.0;
@@ -126,8 +134,8 @@ final class VisionEngine {
 
         final long minTapInterval = (long) (180 - rate * .62); // 180 .. 118 ms
         final boolean cooledDown = timestamp - lastTapAt > minTapInterval;
-        final boolean nearBottom = bird.y > h * .72;
-        final boolean high = bird.y < h * .23;
+        final boolean nearBottom = bird.y > h * .67;
+        final boolean high = bird.y < h * .21;
         // An upward-moving bird should be allowed to coast; a falling one needs a flap.
         final boolean falling = vy > -h * .12;
         final boolean belowCorridor = bird.y > bestY + h * .030;
@@ -147,10 +155,12 @@ final class VisionEngine {
             int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
             int lum = (r * 3 + g * 6 + b) / 10;
             if (Math.abs(r-g) < 37 && Math.abs(g-b) < 37 &&
-                    lum < Math.min(202, background - 26)) dark++;
+                    lum < Math.min(200, background - 34)) dark++;
             n++;
         }
-        return n > 0 && dark >= Math.max(2, (int) Math.ceil(n * .32));
+        // Os espinhos reais ocupam frequentemente só 4–12px da captura
+        // reduzida; a exigência antiga de 32% em uma faixa larga falhava.
+        return n > 0 && dark >= Math.max(3, (int) Math.ceil(n * .23));
     }
 
     private static int brightness(int c) {
@@ -179,9 +189,11 @@ final class VisionEngine {
     }
 
     private Blob findBlob(int[] pix, int w, int h, int kind, boolean birdSearch) {
-        int xMin = (int) (w * (birdSearch ? .18 : .10));
-        int xMax = (int) (w * (birdSearch ? .82 : .90));
-        int yMin = (int) (h * .18), yMax = (int) (h * .79);
+        // Na captura o pássaro encosta nas paredes (x de 0.07 a 0.82).
+        // Não procurar apenas no centro: isso ocultava um dos rebotes.
+        int xMin = (int) (w * (birdSearch ? .02 : .10));
+        int xMax = (int) (w * (birdSearch ? .98 : .90));
+        int yMin = (int) (h * .19), yMax = (int) (h * .70);
         int total = w * h;
         byte[] mask = new byte[total];
         // Build a mask only for the center part of the playfield.
