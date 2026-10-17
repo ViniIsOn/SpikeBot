@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v2.2 beta 🐦
+# SpikesBot Kwai • v2.3 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -316,3 +316,15 @@ Na caixa-preta v2.1, foram observadas duas partidas de 9 e cerca de 6 pontos, 33
 
 ### Validação
 Os testes determinísticos são de lógica, não uma simulação completa com o motor de Don't Touch The Spikes. Ainda não foi confirmado que ultrapasse 9–14 pontos. Teste VISÃO AO VIVO, Verde, SEM DOCES e segurança 65%; três partidas e, se falhar, caixa-preta com os toques reais.
+
+## v2.3 — corrigir queda rápida antes da morte, sem tocar às cegas
+
+Relatório da v2.2 (caixa-preta 8, fornecida pelo usuário): 131 decisões registradas, 32 gestos ENVIADOS e 32 CONCLUÍDOS, 0 cancelados. Oito pontos foram vistos na última partida. No trecho final: Y=196 aos 40.953s, Y=250 aos 41.122s com queda vertical estimada de 320 px/s e comando AGUARDAR, Y=288 aos 41.293s com SUBIR e Y=376 aos 41.480s já muito próximo dos espinhos inferiores.
+
+- Uma **proteção específica contra queda rápida** estima a altura em 240ms. Se o pássaro estiver descendo rapidamente e a previsão atingir a margem de segurança do chão, solicita um pulo imediato (sem aguardar a próxima parede).
+- NÃO adiciona batidas durante subida, perto do teto, pequenas oscilações ou nos primeiros 245ms após um toque: a proteção depende de imagem válida, movimento real, altitude e tempo desde o gesto.
+- Continua usando o agendador com prazos reais da v2.2 para os demais pulos; não controla o jogo por intervalos fixos.
+- Seis novos casos de regressão verificam especificamente o trecho Y250/320px/s, a ausência de falsos pulos, proteção do teto e controle do cooldown.
+- O sistema ainda não tem física exata do jogo; não garante atingir 14 pontos nem sobrevivência infinita.
+
+Teste: VISÃO AO VIVO, Verde, SEM DOCES, margem de segurança 65%. Faça duas partidas e compare as pontuações com 9 e 5 da v2.1 e ~8 da v2.2. Se falhar, compartilhar a caixa-preta permite comparar o momento do resgate com a posição real.

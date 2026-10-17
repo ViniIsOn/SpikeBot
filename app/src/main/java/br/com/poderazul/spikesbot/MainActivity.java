@@ -112,7 +112,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("VISÃO AO VIVO v2.2: mantém a decisão temporizada entre quadros em vez de adiar o mesmo pulo repetidamente. Cancela movimentos se perder o jogo, mudar de parede ou chegar perto do teto.", 12, MUTED, false));
+        control.addView(label("VISÃO AO VIVO v2.3: mantém os pulos planejados da v2.2, mas corrige quedas rápidas ANTES de encostar no chão. Evita pular por pequenos movimentos ou durante a subida. Ainda experimental.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);

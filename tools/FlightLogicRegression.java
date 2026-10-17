@@ -55,6 +55,22 @@ public final class FlightLogicRegression {
         // After a fresh tap the bot must NOT queue another instantly.
         var noDouble=plan(186,308,-135,190,-1,left,55);
         require(!noDouble.jump,"nao acumular toques");
-        System.out.println("SpikesBot v2.1: 8 regressoes fisicas passaram");
+        // v2.2 real black-box timeline at end of 8-point match:
+        // 40.953s Y196, 41.122s Y250 (falling ~320px/s, WAIT),
+        // 41.293s Y288 (falling, SUBIR), 41.480s Y376 (near floor).
+        require(FlightLogic.needsFloorRescue(484,250,320,1000),
+                "v2.3: rescue fast fall at Y250, not at Y288");
+        var firstRescue=plan(23,250,-135,320,-1,empty,1000);
+        require(firstRescue.jump && firstRescue.firstTapDelayMs==0,
+                "v2.3: command immediate flap before floor danger");
+        require(!FlightLogic.needsFloorRescue(484,196,168,1000),
+                "do not flap prematurely during moderate descent");
+        require(!FlightLogic.needsFloorRescue(484,250,-160,1000),
+                "never mistake ascent for falling");
+        require(!FlightLogic.needsFloorRescue(484,250,320,100),
+                "do not double-flap after a recent gesture");
+        require(!FlightLogic.needsFloorRescue(484,135,320,1000),
+                "avoid emergency override near ceiling");
+        System.out.println("SpikesBot v2.3: 14 regressoes fisicas passaram");
     }
 }

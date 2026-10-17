@@ -118,15 +118,38 @@ final class FlightLogic {
         boolean floorDanger=futureFloor>bottom-26 && vy>h*.06;
         int delay=winner.taps>0 ? (int)Math.round(winner.firstTap*1000) : -1;
         if(floorDanger && canTap && since>=.22)delay=0;
+        // v2.3: the v2.2 black box shows the bird already accelerating
+        // down at y=250 (on a 484px field) and "AGUARDAR" was returned.
+        // By y=288 the flap was too late. Predict actual floor impact
+        // over the next ~240 ms and override the wall planner ONLY when
+        // a fast downward motion makes it urgent.
+        boolean rescueFall=needsFloorRescue(h,y,vy,sinceLastTapMs);
+        if(rescueFall && canTap)delay=0;
         boolean now=delay>=0 && delay<=80 && since>=.225 && canTap;
         double noTapY=y+vy*eta+.5*gravity*eta*eta;
         double tapY=y+impulse*eta+.5*gravity*eta*eta;
-        String reason="trajeto "+winner.taps+" pulos, "+
+        String reason=(rescueFall && now?"RESGATE CHAO (queda rapida), ":"")+
+                "trajeto "+winner.taps+" pulos, "+
                 (anySpike?"espinhos":"parede livre")+
                 ", primeiro="+(delay>=0?delay+"ms":"nenhum")+
                 ", custo="+(int)Math.min(99999,winner.cost);
         return new Plan(true,now,target,noTapY,tapY,eta,
                 delay,canTap,reason);
+    }
+
+    /** Time-to-floor fail-safe. NEVER add taps for gentle drift or ascent. */
+    static boolean needsFloorRescue(int h,double birdY,double verticalSpeed,
+                                   long sinceLastTapMs) {
+        if(h<200 || verticalSpeed<=h*.11 || birdY<h*.44)
+            return false;
+        // The previous flap needs a chance to change velocity visibly.
+        if(sinceLastTapMs>=0 && sinceLastTapMs<245)
+            return false;
+        final double dt=.24;
+        final double g=h*GRAVITY_PER_HEIGHT;
+        double predicted=birdY+verticalSpeed*dt+.5*g*dt*dt;
+        double safeFloor=h*(.76-.09);
+        return predicted>=safeFloor;
     }
 
     private static Candidate evaluate(double y,double v,double gravity,
