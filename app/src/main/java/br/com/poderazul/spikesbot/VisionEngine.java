@@ -49,140 +49,150 @@ final class VisionEngine {
                   int rate, long timestamp) {
         final int w = bitmap.getWidth(), h = bitmap.getHeight();
         if (w < 100 || h < 200) {
-            return new Frame(false, false, false, "Resolução muito pequena", 0, 0, 0);
+            return new Frame(false, false, false, "Imagem pequena demais", 0, 0, 0);
         }
-        int[] colors = new int[w * h];
-        bitmap.getPixels(colors, 0, w, 0, 0, w, h);
+        int[] pixels = new int[w * h];
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h);
 
-        int[] spikeL = new int[h];
-        int[] spikeR = new int[h];
-        // Calibrado com 4 capturas 686x1536 da versão atual do jogo.
-        // A barra de captura do Android aparece abaixo de ~0.71h em algumas
-        // imagens: ignoramos essa parte para não classificar a interface como espinhos.
-        final int minY = (int) (0.17 * h), maxY = (int) (0.70 * h);
-        final int stride = 1;
-        int spikeEvidence = 0;
+        // The game has a dark ceiling and floor, including triangular spikes.
+        // At 75% width we are outside the large central score graphic.
+        // On all four screenshots the board runs ~17% to ~85% of screen height.
+        int xBackground = Math.min(w - 1, (int)(w * .86));
+        int outsideTop = brightness(pixels[(int)(h * .11) * w + xBackground]);
+        int insideTop = brightness(pixels[(int)(h * .25) * w + xBackground]);
+        int outsideBottom = brightness(pixels[(int)(h * .92) * w + xBackground]);
+        int insideBottom = brightness(pixels[(int)(h * .79) * w + xBackground]);
+        boolean roofSeen = insideTop - outsideTop > 48;
+        boolean floorSeen = insideBottom - outsideBottom > 48;
 
-        for (int y = minY; y < maxY; y++) {
-            // Amostrar o fundo no corredor e os triângulos nos 9% externos.
-            // O HUD branco do placar fica no meio e não serve de fundo.
-            int bgLuminance = (brightness(colors[y * w + (int)(w * .12)]) +
-                    brightness(colors[y * w + (int)(w * .88)])) / 2;
-            boolean left = isSpikeRow(colors, w, y, (int)(w * .01), (int)(w * .09), stride, bgLuminance);
-            boolean right = isSpikeRow(colors, w, y, (int)(w * .91), (int)(w * .99), stride, bgLuminance);
-            spikeL[y] = left ? 1 : 0;
-            spikeR[y] = right ? 1 : 0;
-            if (left || right) spikeEvidence++;
+        // Detect the actual left and right TRIANGULAR tips, not wide stripes.
+        // Different wall sides must have separate references: averaging both
+        // sides made the dark triangle disappear on some frames.
+        int[] leftWall = new int[h];
+        int[] rightWall = new int[h];
+        int scanTop = (int)(h * .185), scanBottom = (int)(h * .805);
+        int leftRows = 0, rightRows = 0;
+        int leftReferenceX = (int)(w * .13), rightReferenceX = (int)(w * .87);
+        for (int y = scanTop; y < scanBottom; y++) {
+            int leftBackground = brightness(pixels[y*w + leftReferenceX]);
+            int rightBackground = brightness(pixels[y*w + rightReferenceX]);
+            // Tips extend about 0-6% of screen width in the screenshots.
+            boolean l = isSpikeRow(pixels, w, y,
+                    Math.max(1, (int)(w*.01)), (int)(w*.10),
+                    1, leftBackground);
+            boolean r = isSpikeRow(pixels, w, y,
+                    (int)(w*.90), Math.min(w - 1, (int)(w*.99)),
+                    1, rightBackground);
+            leftWall[y] = l ? 1 : 0;
+            rightWall[y] = r ? 1 : 0;
+            if (l) leftRows++;
+            if (r) rightRows++;
         }
-        // Some frames legitimately have no side spikes while the wall pattern
-        // is being replaced. Recognize the stage boundaries independently.
-        // x=.75 avoids both the big white score in the center and the
-        // screenshot editor overlay in the bottom-left of the user's samples.
-        // Using relative luminance works on both blue-grey and grey themes.
-        int atX = (int) (w * .75);
-        int ceiling = brightness(colors[(int)(h*.10)*w + atX]);
-        int topInside = brightness(colors[(int)(h*.27)*w + atX]);
-        int bottomInside = brightness(colors[(int)(h*.75)*w + atX]);
-        int floor = brightness(colors[(int)(h*.92)*w + atX]);
-        boolean boundedStage = topInside - ceiling > 43 &&
-                bottomInside - floor > 43;
-        boolean sideSpikes = spikeEvidence >= Math.max(8, (maxY - minY) / 32);
-        boolean board = boundedStage || sideSpikes;
-        if (!board) {
+        boolean wallSeen = leftRows + rightRows >= Math.max(8, (scanBottom - scanTop) / 38);
+        boolean stageSeen = roofSeen && floorSeen;
+        boolean boardSeen = stageSeen || wallSeen;
+
+        if (!boardSeen) {
             return new Frame(false, false, false,
-                    "Campo não reconhecido (bordas e paredes ausentes)", 0, 0, 0);
+                    "Campo perdido: sem teto/chão ou espinhos detectáveis", 0, 0, 0);
         }
 
-        Blob bird = findBlob(colors, w, h, birdColor, true);
-        // A skin enviada é verde. A alternativa automática ajuda quando
-        // uma configuração antiga deixou "rosa" selecionada por padrão.
-        if (bird == null && birdColor != 3) bird = findBlob(colors, w, h, 3, true);
+        // The bird body has far more connected green pixels than the star trail.
+        Blob bird = findBlob(pixels, w, h, birdColor, true);
+        if (bird == null && birdColor != 3) {
+            bird = findBlob(pixels, w, h, 3, true);
+        }
         if (bird == null) {
-            return new Frame(true, false, false, "Pássaro não encontrado. Escolha Verde na cor do pássaro.", 0, 0, 0);
+            if (timestamp - lastSeenAt > 450) {
+                lastX = -1; lastY = -1; vx = vy = 0;
+            }
+            return new Frame(true, false, false,
+                    "Pássaro perdido: ajuste a cor (verde nas suas imagens)", 0, 0, 0);
         }
 
-        long previousFrameAt = lastSeenAt;
-        double dt = (timestamp - previousFrameAt) / 1000.0;
-        if (previousFrameAt > 0 && dt > .055 && dt < 1.3) {
-            double measuredVx = (bird.x - lastX) / dt;
-            double measuredVy = (bird.y - lastY) / dt;
-            // Smooth noisy detections. Jump causes abrupt vy changes.
-            vx = vx * .28 + measuredVx * .72;
-            vy = vy * .28 + measuredVy * .72;
-            if (measuredVx > w * .08) direction = 1;
-            if (measuredVx < -w * .08) direction = -1;
+        long previousSeen = lastSeenAt;
+        double delta = (timestamp - previousSeen) / 1000.0;
+        if (previousSeen > 0 && delta > .035 && delta < .45) {
+            double observedX = (bird.x - lastX) / delta;
+            double observedY = (bird.y - lastY) / delta;
+            // Smooth the sprite's small detection shifts, but respond to a
+            // rising/falling change within 2-3 frames.
+            vx = .40 * vx + .60 * observedX;
+            vy = .40 * vy + .60 * observedY;
+            if (observedX > w*.14) direction = 1;
+            if (observedX < -w*.14) direction = -1;
+        } else if (delta >= .45 || previousSeen == 0) {
+            vx = 0;
+            vy = 0;
+            direction = bird.x < w*.50 ? 1 : -1;
         }
-        if (bird.x < w * .18 && vx >= 0) direction = 1;
-        if (bird.x > w * .82 && vx <= 0) direction = -1;
+        if (bird.x < w*.095) direction = 1;
+        if (bird.x > w*.905) direction = -1;
         lastX = bird.x;
         lastY = bird.y;
         lastSeenAt = timestamp;
 
-        // Select the widest spike-free window on the approaching wall.
-        int[] nextWall = direction > 0 ? spikeR : spikeL;
-        int radius = (int) (h * (.026 + safety * .00019));
-        int bestY = (int) (h * .46);
+        // Decide which wall we are approaching, then find a corridor with
+        // clearance for the bird body, not merely a gap between two pixels.
+        int[] approachingWall = direction > 0 ? rightWall : leftWall;
+        int approachingRows = direction > 0 ? rightRows : leftRows;
+        int radius = Math.max(10, (int)(h * (.020 + Math.max(0, Math.min(100, safety)) * .00017)));
+        // Ceiling and floor are always hazards, even when side walls are empty.
+        int highLimit = (int)(h * .245);
+        int lowLimit = (int)(h * .757);
+        int preferred = (int)(h * .465);
+        int bestTarget = preferred;
         double bestCost = Double.POSITIVE_INFINITY;
-        Blob candy = collectCandy ? findBlob(colors, w, h, 6, false) : null;
-        boolean candyOnPath = candy != null &&
-                ((direction > 0 && candy.x >= bird.x + w * .035) ||
-                 (direction < 0 && candy.x <= bird.x - w * .035));
+        Blob candy = collectCandy ? findBlob(pixels, w, h, 6, false) : null;
+        boolean relevantCandy = candy != null && (
+                (direction > 0 && candy.x > bird.x + w*.04) ||
+                (direction < 0 && candy.x < bird.x - w*.04));
 
-        // Avoid top/bottom spikes regardless of settings.
-        for (int y = (int) (h * .24); y <= (int) (h * .67); y += 4) {
-            int danger = 0;
-            for (int k = Math.max(minY, y - radius); k < Math.min(maxY, y + radius); k++) {
-                danger += nextWall[k];
-            }
-            if (danger > 0) continue;
-            // BUGFIX v0.6: the previous cost followed the bird's current Y.
-            // That made "bestY" move with the bird, so after one tap the
-            // controller often decided no further flap was needed.
-            // Keep a stable central altitude, then choose a gap near it.
-            double cost = Math.abs(y - h * .46) * 1.70 +
-                    Math.abs(y - bird.y) * .14;
-            // Candies are optional and NEVER override spike clearance.
-            if (candyOnPath) cost += Math.abs(y - candy.y) * .30;
-            if (cost < bestCost) { bestCost = cost; bestY = y; }
-        }
-        if (Double.isInfinite(bestCost)) {
-            // If wall spikes are temporarily absent, this may mean they are
-            // transitioning rather than a full wall of danger. Continue
-            // tracking altitude only while both stage edges are identifiable.
-            if (boundedStage && spikeEvidence < 8) {
-                bestY = (int)(h * .46);
-            } else {
-                return new Frame(true, true, false, "Pausa: sem corredor seguro", bird.x, bird.y, bestY);
+        // Prefix sums allow checking a whole bird-sized corridor per candidate.
+        int[] prefix = new int[h+1];
+        for (int y=0; y<h; y++) prefix[y+1] = prefix[y] + approachingWall[y];
+        for (int y=highLimit; y<=lowLimit; y+=2) {
+            int lo = Math.max(scanTop, y-radius);
+            int hi = Math.min(scanBottom, y+radius);
+            if (prefix[hi] - prefix[lo] != 0) continue;
+            double cost = Math.abs(y - preferred) * 1.5 +
+                    Math.abs(y - bird.y) * .08;
+            // Candies can tip the decision only among safe gaps.
+            if (relevantCandy) cost += Math.abs(y - candy.y) * .45;
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestTarget = y;
             }
         }
+        if (!Double.isFinite(bestCost)) {
+            return new Frame(true, true, false,
+                    "Sem passagem segura na parede " + (direction>0?"direita":"esquerda"),
+                    bird.x, bird.y, preferred);
+        }
 
-        // Frame.jump now means "a flap is recommended", NOT "do a single
-        // immediate tap". The service owns repeated, rate-limited gestures.
-        // Screenshots may only arrive about every 250ms. We must keep a
-        // short-lived flap recommendation between two successful frames.
-        // v0.7: vertical physics are important. The old "rhythmNeeded"
-        // sent another flap while the bird was still ASCENDING, which could
-        // push it into the top spikes in only two taps.
-        // Project position 140 ms forward (bounded for noisy velocities).
-        double futureY = bird.y + Math.max(-h * .08, Math.min(h * .08, vy * .14));
-        final boolean high = bird.y < h * .235;
-        final boolean descendingOrAtApex = previousFrameAt == 0 || dt >= 1.3 || vy > -h * .065;
-        final boolean dangerouslyLow = bird.y > h * .615;
-        final boolean belowSafeBand = futureY > bestY - h * .030;
-        final long interval = Math.max(245L, 335L - (rate * 55L / 100L));
-        final boolean cooldownDone = timestamp - lastTapAt >= interval;
-        boolean jump = cooldownDone && !high &&
-                (dangerouslyLow || (descendingOrAtApex && belowSafeBand));
-
-        String state = high ? "muito alto" :
-                !cooldownDone ? "aguardando intervalo" :
-                !descendingOrAtApex ? "subindo, sem novo toque" :
-                jump ? "queda: subir" : "altitude segura: aguardar";
-        String status = (collectCandy && candyOnPath ?
-                "VISÃO • doce opcional" : "VISÃO • altitude") +
-                " • " + state + (sideSpikes ? " • espinhos" : " • bordas") +
-                " • Y " + (int)bird.y + "→" + bestY;
-        return new Frame(true, true, jump, status, bird.x, bird.y, bestY);
+        // Use vertical motion to determine when the bird needs another flap.
+        // Unlike v0.9, DO NOT run an independent cooldown inside vision:
+        // SpikesService owns the single tap rate limit. Two competing cooldowns
+        // produced two taps followed by an excessive wait.
+        boolean knownVelocity = previousSeen > 0 && delta < .45;
+        double verticalRate = knownVelocity ? vy : 0;
+        double lookAhead = Math.max(-h*.10, Math.min(h*.10, verticalRate * .11));
+        double projectedY = bird.y + lookAhead;
+        boolean risingFast = knownVelocity && verticalRate < -h*.10;
+        boolean tooHigh = bird.y < highLimit + h*.01;
+        boolean floorThreat = bird.y > lowLimit - h*.060;
+        boolean needsFlap = !tooHigh &&
+                (floorThreat ||
+                 (!risingFast && projectedY > bestTarget - h*.043));
+        String flight = risingFast ? "subindo" : verticalRate > h*.05 ? "descendo" : "no ápice";
+        String status = "VISÃO: " + (needsFlap ? "SUBIR" : "ESPERAR") +
+                " • " + flight +
+                " • " + (direction>0?"parede D":"parede E") +
+                " (" + approachingRows + " linhas esp.)" +
+                " • y=" + (int)bird.y + "/" + bestTarget +
+                (relevantCandy ? " • doce" : "");
+        return new Frame(true, true, needsFlap, status,
+                bird.x, bird.y, bestTarget);
     }
 
     private static boolean isSpikeRow(int[] pix, int w, int y, int x0, int x1,
@@ -231,7 +241,7 @@ final class VisionEngine {
         // Não procurar apenas no centro: isso ocultava um dos rebotes.
         int xMin = (int) (w * (birdSearch ? .02 : .10));
         int xMax = (int) (w * (birdSearch ? .98 : .90));
-        int yMin = (int) (h * .19), yMax = (int) (h * .70);
+        int yMin = (int) (h * .185), yMax = (int) (h * (birdSearch ? .815 : .79));
         int total = w * h;
         byte[] mask = new byte[total];
         // Build a mask only for the center part of the playfield.
@@ -269,9 +279,10 @@ final class VisionEngine {
                     if (py > yMin && mask[p-w] == 1) { mask[p-w]=2; flood[tail++]=p-w; }
                     if (py+1 < yMax && mask[p+w] == 1) { mask[p+w]=2; flood[tail++]=p+w; }
                 }
-                if (blob.count < (birdSearch ? 18 : 7) || blob.count > (birdSearch ? 1700 : 600)) continue;
+                if (blob.count < (birdSearch ? 80 : 7) || blob.count > (birdSearch ? 2100 : 600)) continue;
                 double width = blob.maxX - blob.minX + 1, height = blob.maxY - blob.minY + 1;
-                if (width / height < .38 || width / height > 2.65) continue;
+                if (width / height < .38 || width / height > 2.65 ||
+                        (birdSearch && (width < 8 || height < 8))) continue;
                 blob.x = (double) sumX / blob.count;
                 blob.y = (double) sumY / blob.count;
                 double proximity = lastX >= 0 && birdSearch ?

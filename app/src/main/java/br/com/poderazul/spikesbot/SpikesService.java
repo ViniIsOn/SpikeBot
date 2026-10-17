@@ -226,10 +226,10 @@ public class SpikesService extends AccessibilityService {
                 Config.status(this, "Aguardando autorização da captura contínua");
                 return;
             }
-            long cadence = Math.max(155L, 300L - prefs.getInt(Config.RATE, 65));
+            long cadence = Math.max(145L, 228L - prefs.getInt(Config.RATE, 65) / 2L);
             if (visionFlapSuggested && !gesturePending &&
                     lastVisionValidAt > 0 &&
-                    now - lastVisionValidAt < 240L &&
+                    now - lastVisionValidAt < 330L &&
                     now - lastGesture >= cadence) {
                 sendTap(false);
             }

@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.9 beta 🐦
+# SpikesBot Kwai • v1.0 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -157,3 +157,16 @@ O relatório da v0.8 tinha 164 capturas, 70 válidas, 70 perdas do campo, 24 per
 2. Clique iniciar; autorize o compartilhamento da tela inteira.
 3. Inicie a partida manualmente; observe alguns segundos.
 4. Volte ao SpikesBot, toque PARAR O BOT e envie o relatório. **Não precisa deixar o compartilhamento rodando** após o teste.
+
+## v1.0 — visão com duas paredes e controle de voo
+
+- A mudança não é uma sequência fixa de 2, 4 ou 5 cliques. O algoritmo agora lê **cada quadro** do modo VISÃO AO VIVO e estima a velocidade vertical do pássaro.
+- Os limites do cenário são detectados por contraste (teto/chão) e cada parede é analisada com sua **própria cor de fundo**, para identificar triângulos escuros e não confundi-los com a pontuação central.
+- É escolhida uma altura-alvo entre as áreas livres da parede de destino, com margem para o corpo inteiro; piso e teto são tratados como obstáculos em todas as decisões.
+- O filtro distingue o **corpo verde do pássaro** das estrelas pequenas da animação, evitando acompanhar uma partícula.
+- Removida a duplicidade de cooldown de toques que contribuía para o padrão “dois toques e pausa”. O espaçamento é aplicado somente no serviço Android; a visão apenas recomenda subir ou aguardar, conforme a direção da queda.
+- O diagnóstico agora mostra a parede analisada, quantidade de linhas de espinhos, posição vertical atual e alvo, estado de subida/queda e se há recomendação de toque.
+- O modo CONTÍNUO que funcionava permanece sem modificações.
+
+### Teste
+Escolha VISÃO AO VIVO, skin Verde e doces desativados. Autorize a captura de tela inteira, inicie o jogo e observe. Se o pássaro morrer, envie o painel de diagnóstico e preferencialmente um vídeo curto da partida. Essa versão compila, mas não é validação de jogabilidade em tempo real e não garante sobreviver a todos os espinhos.
