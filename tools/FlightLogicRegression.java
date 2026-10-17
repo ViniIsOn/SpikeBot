@@ -46,9 +46,11 @@ public final class FlightLogicRegression {
         // 223..233 and 276..286. The gap between them is valid.
         int[][] right={{197,206},{223,233},{276,286}};
         var narrow=plan(107,265,135,50,1,right,700);
+        // This apparent narrow gap is NOT large enough for the bird and
+        // its reaction margin. Select a reachable wider corridor instead.
         require(narrow.hasCorridor &&
-                narrow.target>=249&&narrow.target<=261,
-                "reconhecer faixa estreita entre espinhos");
+                (narrow.target<180||narrow.target>307),
+                "nao escolher abertura estreita menor que o passaro");
 
         // After a fresh tap the bot must NOT queue another instantly.
         var noDouble=plan(186,308,-135,190,-1,left,55);

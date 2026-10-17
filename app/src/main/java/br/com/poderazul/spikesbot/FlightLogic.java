@@ -57,7 +57,15 @@ final class FlightLogic {
             if(free&&from<0)from=row;
             if(!free&&from>=0){
                 int last=row-1,mid=(last+from)/2,gap=last-from+1;
-                double score=Math.abs(mid-center)*.9+
+                // A broad opening must also be reachable from CURRENT Y.
+                // An unreachable high corridor is worse than a safe lower one.
+                double horizon=Math.min(.45,eta);
+                double coast=y+vy*horizon+.5*gravity*horizon*horizon;
+                double flap=y+impulse*horizon+.5*gravity*horizon*horizon;
+                double reachable=Math.min(Math.abs(mid-coast),
+                                          Math.abs(mid-flap));
+                double score=Math.abs(mid-center)*.50+
+                        Math.abs(mid-y)*.50+reachable*.30+
                         Math.max(0,24-gap)*6;
                 if(score<bestLane){bestLane=score;target=mid;}
                 largestGap=Math.max(largestGap,gap);

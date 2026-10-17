@@ -300,3 +300,5 @@ Na caixa-preta v2.0 fornecida pelo usuário, a última partida mostrava **9 pont
 
 ### Teste real
 VISÃO AO VIVO, Verde, doces desligados, margem 65%. Teste três partidas e compartilhe a caixa-preta se ocorrer colisão. Compare a pontuação e o comportamento com os 9 pontos do registro v2.0 e com o melhor observado de 14 da v1.5.
+
+Observação de regressão: uma abertura estreita entre y=233 e y=276 é menor que o corpo do pássaro mais a margem. O planejador deve rejeitá-la e selecionar um corredor mais amplo e alcançável; não perseguir um alvo exato previamente fixado.
