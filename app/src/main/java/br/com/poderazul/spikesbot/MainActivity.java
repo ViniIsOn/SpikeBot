@@ -11,6 +11,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import androidx.core.content.FileProvider;
+import java.io.File;
+import java.io.IOException;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -154,7 +157,11 @@ public class MainActivity extends Activity {
         addMargin(status, statusText, 8, 0, 0, 0);
         detailText = label("Nenhuma partida iniciada", 12, MUTED, false);
         addMargin(status, detailText, 6, 0, 0, 0);
-        status.addView(label("Depois do teste, confira o número de campos perdidos, falhas de captura e o intervalo atual. O modo VISÃO ainda é experimental e não garante sobrevivência.", 12, MUTED, false));
+        status.addView(label("CAIXA-PRETA: durante a VISÃO AO VIVO o app guarda somente imagens espaçadas do jogo e decisões de voo, no armazenamento privado. O relatório NÃO sai do celular até você compartilhar.", 12, MUTED, false));
+        Button report = actionButton("📦 COMPARTILHAR DIAGNÓSTICO (.ZIP)", 0xFF203A56, LIGHT);
+        addMargin(status, report, 12, 0, 0, 0);
+        report.setOnClickListener(v -> shareReport());
+        status.addView(label("Faça uma partida, volte aqui, pare o bot e compartilhe o ZIP. Ele não é um vídeo MP4; contém quadros e uma tabela dos comandos.", 12, MUTED, false));
 
         startBtn = actionButton("▶ INICIAR BOT AUTOMÁTICO", CYAN, BG);
         addMargin(screen, startBtn, 12, 8, 0, 0);
@@ -190,9 +197,35 @@ public class MainActivity extends Activity {
         addMargin(screen, access, 10, 0, 0, 0);
         access.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
 
-        TextView tip = label("No modo VISÃO AO VIVO, confirme o compartilhamento da TELA INTEIRA. O Android mostra uma notificação enquanto a captura está ativa. O SpikesBot não salva nem envia imagens; ao terminar, use PARAR O BOT. Para o Kwai, grave separadamente com o gravador nativo e indique que é um bot.", 13, MUTED, false);
+        TextView tip = label("A captura ao vivo precisa da sua autorização. A CAIXA-PRETA guarda quadros do jogo no próprio celular, apenas para diagnóstico, e nunca os envia automaticamente. Revise o ZIP antes de compartilhar. O gravador normal do Android pode não funcionar ao mesmo tempo.", 13, MUTED, false);
         addMargin(screen, tip, 17, 0, 0, 0);
         refresh();
+    }
+
+    private void shareReport() {
+        if (prefs.getBoolean(Config.RUN, false)) {
+            Toast.makeText(this, "Pare o bot antes de compartilhar o diagnóstico",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            File archive = FlightRecorder.export(this);
+            if (archive == null) {
+                Toast.makeText(this, "Sem imagens guardadas. Teste VISÃO AO VIVO primeiro.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            Uri uri = FileProvider.getUriForFile(this,
+                    getPackageName() + ".fileprovider", archive);
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("application/zip");
+            share.putExtra(Intent.EXTRA_STREAM, uri);
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(share, "Enviar caixa-preta do SpikesBot"));
+        } catch (IOException | RuntimeException error) {
+            Toast.makeText(this, "Não foi possível exportar: " +
+                    error.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void start() {

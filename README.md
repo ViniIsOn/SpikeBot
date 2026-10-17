@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.1 beta 🐦
+# SpikesBot Kwai • v1.2 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -9,7 +9,7 @@
 - **Cores do pássaro:** rosa, azul, roxo, verde, preto e vermelho.
 - **Controle de segurança e frequência:** ajustável na tela inicial.
 - **Botão iniciar/parar**, detecção por screenshots e toques do Android AccessibilityService.
-- Sem INTERNET, sem anúncios, sem envio de capturas, sem salvamento de imagens e sem permissão para acessar outros aplicativos ou contas.
+- Sem INTERNET, sem anúncios e sem envio automático de capturas. A partir da v1.2, a CAIXA-PRETA guarda imagens temporárias do jogo em armazenamento privado para diagnóstico; o compartilhamento exige ação explícita.
 - Planejado para uso junto do **gravador de tela nativo do Android**, em vídeos verticais para o Kwai.
 
 ## ⚠️ Limitações que você precisa conhecer
@@ -186,3 +186,15 @@ Escolha VISÃO AO VIVO, skin Verde e doces desativados. Autorize a captura de te
 
 ### Experimento sugerido
 VISÃO AO VIVO, cor Verde, doces OFF e segurança 65%. Faça apenas algumas partidas. Se persistir a queda, envie um vídeo curto para estimar velocidade, impulso do pulo e posição exata das colisões. Não inferir sucesso apenas pela compilação.
+
+## v1.2 — caixa-preta interna, sem conflito entre gravadores
+
+Quando a MediaProjection está ativa, gravar simultaneamente com o gravador de tela do celular pode ser bloqueado. Esta atualização NÃO inicia outra gravação. Ela aproveita o fluxo de quadros que o SpikesBot já recebe com autorização da tela inteira.
+
+- Durante o modo VISÃO AO VIVO, o bot armazena localmente até **70 imagens JPEG recentes** (intervalo de pelo menos 280ms) e um CSV de decisões com tempos, alvo Y, pulo sugerido, visibilidade do campo/pássaro e contador de toques. Não coleta outros apps intencionalmente: só grava quando o serviço de acessibilidade identifica Don't Touch The Spikes em primeiro plano.
+- O botão **COMPARTILHAR DIAGNÓSTICO (.ZIP)** gera um pacote pelo Android Share Sheet, usando FileProvider. Ele não é vídeo MP4.
+- O compartilhamento só acontece quando a pessoa pede. Antes disso tudo fica no espaço privado do app, e a próxima sessão substitui as imagens da anterior.
+- Há aviso na interface de que capturas podem incluir notificações sobrepostas; revise o conteúdo antes de enviar.
+- O algoritmo de voo da v1.1 fica preservado para medirmos, em vez de adivinhar novos parâmetros. Os 5 pontos observados ainda não demonstram uma melhora de sobrevivência.
+
+Teste: escolha VISÃO AO VIVO + cor Verde + SEM doces. Jogue até falhar. Pare o bot, toque em COMPARTILHAR DIAGNÓSTICO e envie o ZIP aqui. A análise de sequências de quadros com timestamps permitirá ajustar impulso/gravitidade e detecção de espinhos com mais fundamento.

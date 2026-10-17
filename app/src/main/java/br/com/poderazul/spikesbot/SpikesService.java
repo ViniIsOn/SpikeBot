@@ -364,6 +364,14 @@ public class SpikesService extends AccessibilityService {
                 prefs.getInt(Config.COLOR, 0), prefs.getBoolean(Config.CANDY, false),
                 prefs.getInt(Config.SAFETY, 65), prefs.getInt(Config.RATE, 65),
                 SystemClock.uptimeMillis());
+        // This reuses the authorized LIVE projection; never starts a second
+        // screen recorder. Only the game is processed (acceptLiveFrame guard).
+        if (prefs.getInt(Config.MODE, 1) == 1) {
+            FlightRecorder.capture(this, scaled, result,
+                    SystemClock.uptimeMillis(),
+                    prefs.getLong(Config.SESSION_START, 0L),
+                    prefs.getInt(Config.TAPS, 0));
+        }
         frames++;
         boolean valid = result.birdFound && result.boardFound;
         if (valid) {
