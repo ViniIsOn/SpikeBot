@@ -91,10 +91,10 @@ final class FlightLogic {
         // 33.700s (Y=314), when a safe correction was no longer possible.
         // Track the bird's CURRENT trajectory, not only the end-wall cost.
         double look=.23;
-        double futureY=y+speed*look+
+        double futureY=y+vy*look+
                 .5*gravity*look*look;
-        boolean descending= speed>h*.055;
-        boolean rising= speed< -h*.095;
+        boolean descending= vy>h*.055;
+        boolean rising= vy< -h*.095;
         boolean floorGuard=futureY>floor-Math.max(34,h*.088);
         boolean wallGuard=eta<.84 && descending &&
                 target<y+h*.022 && futureY>target+h*.050;
@@ -105,7 +105,7 @@ final class FlightLogic {
         boolean rescue=(floorGuard || wallGuard || middleGuard || highGap);
         // Repeated upward flaps caused the v1.6 regression. A bird still
         // ascending or already close to the ceiling must never use rescue.
-        boolean ceilingSoon=y+Math.min(speed,0)*.16+
+        boolean ceilingSoon=y+Math.min(vy,0)*.16+
                 .5*gravity*.16*.16<ceiling+h*.030;
         if(rescue && !rising && !ceilingThreat && !ceilingSoon)jump=true;
         if(ceilingThreat || ceilingSoon || (risingFast && !urgentFall))jump=false;
