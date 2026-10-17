@@ -126,11 +126,10 @@ public final class LiveCaptureService extends Service {
             long now = SystemClock.uptimeMillis();
             // Around 12fps is sufficient for a first real-time calibration.
             if (now - lastFrame < 80) return;
-            if (now - sessionStarted >= 120000) {
-                Config.status(this, "Sessão de captura encerrada após 2 minutos");
-                stopSelf();
-                return;
-            }
+            // Explicitly requested long-running play: no artificial
+            // two-minute limit in VISÃO AO VIVO. Android can still stop
+            // MediaProjection; the user can stop it through the notification
+            // or by pressing PARAR O BOT at any time.
             SpikesService target = SpikesService.activeInstance();
             if (target == null || !Config.get(this).getBoolean(Config.RUN, false) ||
                     Config.get(this).getInt(Config.MODE, 1) != 1) {

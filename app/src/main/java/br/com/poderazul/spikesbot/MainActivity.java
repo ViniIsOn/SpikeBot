@@ -112,7 +112,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("VISÃO AO VIVO v1.9: física da v1.5 preservada. A caixa-preta grava em outra thread para não atrasar o jogo e registra horários reais dos toques. Teste sem doces.", 12, MUTED, false));
+        control.addView(label("VISÃO AO VIVO v2.0: proteção contra quedas rápidas antes da próxima parede, sem pulos extras durante a subida. Sessão sem limite fixo de 2 minutos; pare pelo app ou notificação. Não garante sobreviver para sempre.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);

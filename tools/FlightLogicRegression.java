@@ -36,6 +36,23 @@ public final class FlightLogicRegression {
         var avoid=FlightLogic.choose(216,484,97,250,136,60,1,blocked,89,392,65,500);
         require(avoid.hasCorridor && (avoid.target<185 || avoid.target>285),
                 "find a different wall opening when middle is blocked");
-        System.out.println("SpikesBot v1.5: 9 physical and recorded-wall checks passed");
+        // v1.9 real black-box regressions: do NOT wait until the bird
+        // reaches Y=314 when it was already falling at Y=244.
+        var beforeFall=empty(115,244,135,212,850);
+        require(beforeFall.hasCorridor && beforeFall.jump,
+                "rescue descent at y=244 before wall, not at y=314");
+        var approaching=empty(76,251,135,144,800);
+        require(approaching.jump,
+                "react to dangerous falling trajectory before reaching side wall");
+        var stillRising=empty(171,168,135,-160,700);
+        require(!stillRising.jump,
+                "never flap again while climbing near the ceiling");
+        var safe=empty(90,215,135,25,700);
+        require(!safe.jump,
+                "do not overreact to small mid-screen changes");
+        var justTapped=empty(115,244,135,212,100);
+        require(!justTapped.jump,
+                "prevent repeated flaps before the previous one can take effect");
+        System.out.println("SpikesBot v2.0: 14 safety and flight checks passed");
     }
 }

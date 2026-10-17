@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.9 beta 🐦
+# SpikesBot Kwai • v2.0 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -271,3 +271,18 @@ Na caixa-preta v1.8: 64 linhas amostradas e 22 toques contados, com várias pass
 - Atualizações de interface no máximo a cada 430ms para reduzir cargas desnecessárias.
 - Preserva integralmente a física da v1.5 e o modo CONTÍNUO: **não promete pontuação maior sem teste real**.
 - Exporte a caixa-preta depois de parar para comparar o controle visual com os gestos reais.
+
+## v2.0 — busca de sobrevivência longa, sem prometer infinito
+
+A caixa-preta v1.9 registrou **113 decisões**, **22 gestos enviados e concluídos**, uma partida até 9 pontos e outra que terminou rapidamente. O ponto mais claro é a queda final: Y=216 (33.394s), Y=244 (33.526s, decisão AGUARDAR), Y=314 (33.700s, só então SUBIR). Isso mostra um atraso do controlador de altitude, não um erro do sistema de toques.
+
+- Proteção reativa de queda no `FlightLogic` além da simulação de trajetória futura: considera velocidade vertical, posição prevista em 230 ms e distância à parede. Só antecipa toques quando há risco de chegar baixo demais.
+- Evita a regressão da v1.6 ao bloquear as correções extras quando o pássaro ainda está subindo ou já está perto do teto.
+- Cooldown adaptativo: 245ms para correção normal, 195ms numa queda de emergência; sem rajadas fixas de cliques.
+- Retirado limite artificial de captura de tela de 2 minutos do modo VISÃO AO VIVO. A sessão continua apenas enquanto autorizada pelo usuário e ainda pode ser encerrada por PARAR O BOT, pela notificação do Android ou pelo próprio sistema.
+- Os quadros não são transmitidos nem salvos automaticamente fora do armazenamento privado do app. Para sessões longas, a caixa-preta retém os últimos 70 JPEGs; recomenda-se limitar o tamanho dos CSVs em atualização futura.
+- Cinco novos testes de regressão cobrem trechos da caixa-preta v1.9, proteção do teto e cooldown após toque.
+
+**Limitação:** não existe garantia de pontuação ou sobrevivência infinitas num jogo com obstáculos variáveis e latência Android. A primeira meta é ultrapassar consistentemente os 14 pontos observados na v1.5, depois 30, 50, 100 e assim por diante. Modo DOCES pode continuar OFF até estabilidade.
+
+Para comparar: VISÃO AO VIVO / Verde / SEM doces / segurança 65%. Faça algumas partidas e compartilhe a caixa-preta se o piloto perder. Verifique as imagens do ZIP antes de enviá-lo.

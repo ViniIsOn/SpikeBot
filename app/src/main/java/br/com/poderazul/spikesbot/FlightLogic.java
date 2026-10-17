@@ -84,18 +84,47 @@ final class FlightLogic {
         boolean jump=bestDelay>=0 && bestFlapScore+3<waitScore && bestDelay<=.085;
         if(urgentFall && bestDelay>=0 && bestDelay<=.16 &&
                 bestFlapScore<waitScore+35) jump=true;
-        if(ceilingThreat)jump=false;
-        if(risingFast && !urgentFall)jump=false;
 
-        // The latest image often arrives before the previous tap's upward
-        // impulse shows in the sprite. Avoid double-flapping based on stale Y.
-        if(sinceLastTapMs>=0 && sinceLastTapMs<285)jump=false;
+        // v2.0: a v1.9 black box exposed a slow-fall-to-floor failure.
+        // At 33.526s, bird Y=244, target=228, descending rapidly.
+        // The old delayed-tap score still told the bot to WAIT until
+        // 33.700s (Y=314), when a safe correction was no longer possible.
+        // Track the bird's CURRENT trajectory, not only the end-wall cost.
+        double look=.23;
+        double futureY=y+speed*look+
+                .5*gravity*look*look;
+        boolean descending= speed>h*.055;
+        boolean rising= speed< -h*.095;
+        boolean floorGuard=futureY>floor-Math.max(34,h*.088);
+        boolean wallGuard=eta<.84 && descending &&
+                target<y+h*.022 && futureY>target+h*.050;
+        boolean middleGuard=descending && y>center+h*.048 &&
+                futureY>center+h*.070;
+        boolean highGap=target<center-h*.10 && eta<1.10 &&
+                y>target+h*.085 && descending;
+        boolean rescue=(floorGuard || wallGuard || middleGuard || highGap);
+        // Repeated upward flaps caused the v1.6 regression. A bird still
+        // ascending or already close to the ceiling must never use rescue.
+        boolean ceilingSoon=y+Math.min(speed,0)*.16+
+                .5*gravity*.16*.16<ceiling+h*.030;
+        if(rescue && !rising && !ceilingThreat && !ceilingSoon)jump=true;
+        if(ceilingThreat || ceilingSoon || (risingFast && !urgentFall))jump=false;
 
-        String reason=jump?"pulo necessario":
+        // A falling bird near the floor may need a second flap sooner than
+        // an ordinary manoeuvre. Keep a minimum gesture spacing; never
+        // queue arbitrary bursts or continue without a valid live frame.
+        boolean emergency= floorGuard && descending && y>center+h*.10;
+        long cooldown=emergency?195:245;
+        if(sinceLastTapMs>=0 && sinceLastTapMs<cooldown)jump=false;
+
+        String reason=jump?(rescue?(floorGuard?"queda: proteger chao":
+                highGap?"alcancar passagem alta":
+                wallGuard?"preparar parede":"estabilizar voo"):
+                "pulo previsto"):
+                ceilingThreat || ceilingSoon?"teto proximo":
+                rising?"subindo: aguardar":
                 bestDelay>.085 && bestFlapScore+3<waitScore?
-                "aguardar momento do proximo pulo":
-                ceilingThreat?"proximo do teto":
-                risingFast?"subindo rapidamente":"corrigindo altitude";
+                "espera planejada":"altitude estavel";
         return new Plan(true,jump,target,noFlapEnd,flapNowEnd,eta,reason);
     }
 
