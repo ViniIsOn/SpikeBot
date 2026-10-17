@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.3 beta 🐦
+# SpikesBot Kwai • v1.4 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -213,3 +213,17 @@ Os 80 registros temporais, 9 imagens e a caixa-preta mostram que o modo VISÃO a
 
 ### Teste específico
 No modo VISÃO AO VIVO, escolha cor Verde, SEM DOCES e margem 65%. Teste apenas uma ou duas partidas e depois envie o próximo ZIP da caixa-preta (ou CSV e os quadros próximos da derrota). Não compartilhe outros conteúdos capturados se houver notificações sensíveis.
+
+## v1.4 — corrigir a inatividade medida com a caixa-preta
+
+A caixa-preta enviada contém 64 observações, 32 com campo e pássaro detectados, mas **apenas duas decisões de subir**. O jogo chegou a apenas **2 pontos** numa das partidas registradas.
+
+- **Erro real do código anterior:** as duas alternativas (tocar / esperar) escolhiam independentemente seu melhor corredor. Como a alternativa de esperar tinha um corredor calculado perto da altura prevista, a pontuação de espera quase sempre vencia.
+- **Medição corrigida:** os trechos sem novo toque têm velocidade horizontal de aproximadamente 96 a 159 pixels/s no campo reduzido de 216 pixels, mediana **135 px/s**. A v1.3 presumiu pelo menos 346px/s. Isso calculava tempo de chegada à parede curto demais. Usa agora 0.43..0.88×largura, com padrão ~135px/s.
+- A nova classe pura `FlightLogic.java` escolhe **uma única altura segura** (independente de tocar/esperar) e compara as duas previsões com o mesmo alvo e com teto/chão.
+- Pausa o comando quando o pássaro está no **menu inicial**, identificado por ausência de movimento horizontal real; o usuário inicia a partida manualmente.
+- A física ainda é aproximada e a detecção por cores pode falhar, mas cada pulo passa a depender da previsão atual, não de uma contagem fixada.
+- Os testes automatizados de regressão (Java puro, sem emulador) simulam queda, subida, teto, chão, atraso do toque, tempo de chegada à parede e faixas de espinhos.
+- O modo CONTÍNUO permanece intacto; a caixa-preta ainda pode ser exportada após a partida.
+
+Teste VISÃO AO VIVO, pássaro Verde, doces desligados e margem 65%. Envie o ZIP da nova partida e compare os comandos SUBIR vs AGUARDAR. Não declare a precisão perfeita apenas por compilar.
