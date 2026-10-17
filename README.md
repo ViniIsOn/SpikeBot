@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.1 beta 🐦
+# SpikesBot Kwai • v0.2 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -16,14 +16,14 @@
 
 A IA de visão desta versão é uma **heurística de detecção de cor e espinhos**, não uma IA treinada. **Não está calibrada com gameplay real do seu celular e não garante sequer uma partida sem erros.** O jogo pode ter mudado suas cores, fundos e física. O serviço de acessibilidade pode ser lento para uma partida rápida. Não funciona nos modos Cave, Park ou Duel. Em alguns dispositivos, capturas de tela de outros aplicativos são bloqueadas.
 
-A v0.1 apenas tenta jogar quando identifica um pássaro E espinhos laterais. Se não os reconhecer, **não toca na tela**. Ela não inicia automaticamente novas partidas, não toca em anúncios e não garante recordes.
+A v0.2 apenas tenta jogar quando identifica um pássaro E espinhos laterais. Se não os reconhecer, **não toca na tela**. Ela não inicia automaticamente novas partidas, não toca em anúncios e não garante recordes.
 
 ## Como gerar o APK (GitHub Actions)
 
 1. Crie um repositório **vazio**, como `SpikesBot-Kwai`, na sua conta GitHub.
 2. Coloque **todos os arquivos e pastas deste projeto** na raiz do repositório, preservando `.github/workflows/android-apk.yml`.
 3. Após enviar para a branch `main` ou `master`, abra **Actions → APK Android - SpikesBot → execução mais recente**.
-4. Espere a compilação terminar. Em **Artifacts**, baixe `SpikesBot-Kwai-v0.1-beta-APK`.
+4. Espere a compilação terminar. Em **Artifacts**, baixe `SpikesBot-Kwai-v0.2-beta-APK`.
 5. Extraia o ZIP do artefato. O APK compilado se chama `app-debug.apk`.
 
 > É um APK de depuração do seu próprio projeto. Não é um APK oficial da Ketchapp. Não foi compilado ou testado em um aparelho neste ambiente; a ação do GitHub faz a compilação real.
@@ -57,3 +57,9 @@ O Android pode restringir o serviço por motivos de segurança ou mudar seu comp
 - `.github/workflows/android-apk.yml` — compilação automática com Gradle.
 
 **Próxima etapa recomendada:** receber capturas reais de duas ou três partidas, inclusive uma com doce, para ajustar o detector de espinhos e os intervalos de pulo antes de afirmar que funciona bem.
+
+## Ícone e configurações restritas (v0.2)
+
+O ícone agora é **vetorial XML**, desenhado com formas e cores, sem geração de imagem nem arquivos externos. O aplicativo também contém um botão **Abrir detalhes do app** e uma explicação sobre o aviso de configuração restrita do Android. Essa restrição é do sistema: o aplicativo não consegue desativá-la por código. Use a opção de autorização do próprio Android somente se confiar no APK.
+
+**Atenção ao atualizar:** o APK debug criado em outro ambiente GitHub Actions pode ter assinatura diferente. Se aparecer `O app não foi instalado`, talvez seja preciso desinstalar a versão anterior antes de instalar esta (isso apaga configurações locais).

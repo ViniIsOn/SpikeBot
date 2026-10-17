@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Two sidewalls with red spikes -->
+    <path android:fillColor="#30506C" android:pathData="M27,33 L30,33 L30,76 L27,76 Z M78,33 L81,33 L81,76 L78,76 Z"/>
+    <path android:fillColor="#FF617A" android:pathData="M30,36 L37,41 L30,46 Z M30,49 L37,54 L30,59 Z M30,62 L37,67 L30,72 Z M78,36 L71,41 L78,46 Z M78,49 L71,54 L78,59 Z M78,62 L71,67 L78,72 Z"/>
+    <!-- Motion arcs -->
+    <path android:fillColor="#00000000" android:strokeColor="#56E3EC" android:strokeWidth="2.4" android:strokeLineCap="round" android:pathData="M38,68 Q33,54 40,43 M70,43 Q76,55 70,68"/>
+    <!-- Tiny tail feathers -->
+    <path android:fillColor="#2386D7" android:pathData="M43,62 L35,65 L43,55 Z"/>
+    <!-- Body + upward wing -->
+    <path android:fillColor="#00B7E3" android:pathData="M40,50 C40,39 49,35 58,38 C68,40 74,50 68,60 C63,70 48,72 42,63 C39,59 39,54 40,50 Z"/>
+    <path android:fillColor="#56E3EC" android:pathData="M45,58 C49,46 60,44 65,51 C63,62 54,67 45,64 Z"/>
+    <!-- Face -->
+    <path android:fillColor="#FFFFFF" android:pathData="M61,44 C65,42 69,46 67,51 C64,54 59,50 61,44 Z"/>
+    <path android:fillColor="#081326" android:pathData="M64,46 C66,45 67,47 66,49 C64,50 63,48 64,46 Z"/>
+    <path android:fillColor="#FFC352" android:pathData="M69,51 L78,54 L68,58 Z"/>
+    <!-- Small sparkle -->
+    <path android:fillColor="#FFD97F" android:pathData="M48,32 L49.5,35 L53,36.5 L49.5,38 L48,41 L46.5,38 L43,36.5 L46.5,35 Z"/>
+</vector>

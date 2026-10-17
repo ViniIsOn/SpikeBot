@@ -132,6 +132,19 @@ public class MainActivity extends Activity {
             refresh();
             Toast.makeText(this, "Bot desligado", Toast.LENGTH_SHORT).show();
         });
+        LinearLayout permission = card(screen);
+        permission.addView(label("PERMISSÃO DE ACESSIBILIDADE", 12, CYAN, true));
+        addMargin(permission, label("Se o Android mostrar 'Configuração restrita', o aplicativo não consegue remover esse bloqueio. Confira a origem do APK antes de permitir o acesso. Em Configurações > Apps > SpikesBot Kwai > menu ⋮ pode existir a opção oficial 'Permitir configurações restritas'.", 13, LIGHT, false), 8, 0, 0, 0);
+        addMargin(permission, label("A acessibilidade permite visualizar informações na tela e enviar toques. Ative somente se confiar neste APK e desligue ao terminar a gravação.", 12, MUTED, false), 8, 0, 0, 0);
+
+        Button details = actionButton("ⓘ ABRIR DETALHES DO APP", 0xFF203A56, LIGHT);
+        addMargin(screen, details, 10, 0, 0, 0);
+        details.setOnClickListener(v -> {
+            Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName()));
+            startActivity(info);
+        });
+
         Button access = actionButton("⚙ CONFIGURAR ACESSIBILIDADE", 0xFF203A56, LIGHT);
         addMargin(screen, access, 10, 0, 0, 0);
         access.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
