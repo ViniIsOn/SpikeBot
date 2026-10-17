@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v2.1 beta 🐦
+# SpikesBot Kwai • v2.2 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -302,3 +302,17 @@ Na caixa-preta v2.0 fornecida pelo usuário, a última partida mostrava **9 pont
 VISÃO AO VIVO, Verde, doces desligados, margem 65%. Teste três partidas e compartilhe a caixa-preta se ocorrer colisão. Compare a pontuação e o comportamento com os 9 pontos do registro v2.0 e com o melhor observado de 14 da v1.5.
 
 Observação de regressão: uma abertura estreita entre y=233 e y=276 é menor que o corpo do pássaro mais a margem. O planejador deve rejeitá-la e selecionar um corredor mais amplo e alcançável; não perseguir um alvo exato previamente fixado.
+
+## v2.2 — agendamento comprometido de pulos e segurança
+
+Na caixa-preta v2.1, foram observadas duas partidas de 9 e cerca de 6 pontos, 33 gestos enviados/concluídos, sem cancelamentos, e uma colisão na parede esquerda por volta de 27.1s, após a decisão de pular ter sido adiada por capturas sucessivas. O planejador previa múltiplos toques, mas seu serviço só executava quando uma nova imagem recomendava "SUBIR AGORA"; prazos futuros eram perdidos.
+
+- O `TapSchedule` agora mantém um prazo real no relógio monotônico do Android. Se o plano recomenda "pular em 450ms" e o quadro seguinte diz "em 320ms", não reinicia a espera do zero.
+- Agenda somente o **próximo gesto**, nunca uma sequência cega, e requer uma imagem válida do jogo com menos de 245ms; interrompe se trocar a direção, mudar a passagem muito, identificar subida forte/teto, perder campo/pássaro ou sair do jogo.
+- Após executar o gesto, o serviço só aceita outro com o intervalo apropriado e em quadros posteriores. Continua com o modo CONTÍNUO separado.
+- A física foi ligeiramente ajustada para considerar 125ms de tempo efetivo antes do impulso e risco de queda; esse número é hipótese conservadora de latência, não medição exata.
+- Penaliza corredores perto demais do teto/chão e rejeita falsos espaços menores que o corpo mais a margem.
+- Adicionados testes JDK de prazos de toque (inclusive recálculo sucessivo, cancelamento e troca de parede), além dos testes de física existentes.
+
+### Validação
+Os testes determinísticos são de lógica, não uma simulação completa com o motor de Don't Touch The Spikes. Ainda não foi confirmado que ultrapasse 9–14 pontos. Teste VISÃO AO VIVO, Verde, SEM DOCES e segurança 65%; três partidas e, se falhar, caixa-preta com os toques reais.

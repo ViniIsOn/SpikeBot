@@ -56,6 +56,7 @@ public class SpikesService extends AccessibilityService {
     private volatile long latestProcessedLiveFrameAt = 0;
     private int frames = 0;
     private long lastStatusUpdateAt = 0;
+    private final TapSchedule tapSchedule = new TapSchedule();
     private boolean wasActive = false;
 
     @Override protected void onServiceConnected() {
@@ -148,6 +149,7 @@ public class SpikesService extends AccessibilityService {
                 frames = 0;
                 if (worker != null) worker.post(vision::reset);
                 visionFlapSuggested = false;
+                tapSchedule.reset();
                 lastVisionValidAt = 0;
                 capturePendingSince = 0;
             }
@@ -161,11 +163,13 @@ public class SpikesService extends AccessibilityService {
             lostBoardFrames = 0; captureFailures = 0; captureTimeouts = 0;
             gestureCompletions = 0; gestureCancels = 0;
             visionFlapSuggested = false;
+            tapSchedule.reset();
             lastVisionValidAt = 0;
             if (worker != null) worker.post(vision::reset);
         }
         if (!Config.PACKAGE.equals(activePackage())) {
             visionFlapSuggested = false;
+            tapSchedule.reset();
             if (!screenshotPending) Config.status(this, "Aguardando o jogo original ficar em primeiro plano");
             return;
         }
@@ -227,11 +231,11 @@ public class SpikesService extends AccessibilityService {
                 Config.status(this, "Aguardando autorização da captura contínua");
                 return;
             }
-            long cadence = Math.max(190L, 228L - prefs.getInt(Config.RATE, 65) / 2L);
-            if (visionFlapSuggested && !gesturePending &&
-                    lastVisionValidAt > 0 &&
-                    now - lastVisionValidAt < 280L &&
-                    now - lastGesture >= cadence) {
+            long cadence = Math.max(210L, 228L - prefs.getInt(Config.RATE, 65) / 2L);
+            // Defer a planned flap to a committed deadline, instead of
+            // resetting that deadline whenever the next frame arrives.
+            if (!gesturePending && now-lastGesture>=cadence &&
+                    tapSchedule.consumeIfDue(now)) {
                 sendTap(false);
             }
             return;
@@ -387,6 +391,11 @@ public class SpikesService extends AccessibilityService {
         }
         lastVisionReason = result.description;
         long t = SystemClock.uptimeMillis();
+        if (prefs.getInt(Config.MODE,1)==1) {
+            tapSchedule.observe(t,valid,result.jump,
+                    result.tapDelayMs,result.flightDirection,
+                    (int)result.targetY,result.canTap);
+        }
         if (t - lastStatusUpdateAt >= 430L) {
             lastStatusUpdateAt = t;
             Config.status(this, result.description);

@@ -29,11 +29,13 @@ jobs:
           mkdir -p /tmp/spikes-tests
           javac -d /tmp/spikes-tests app/src/main/java/br/com/poderazul/spikesbot/FlightLogic.java tools/FlightLogicRegression.java
           java -cp /tmp/spikes-tests br.com.poderazul.spikesbot.FlightLogicRegression
+          javac -d /tmp/spikes-tests app/src/main/java/br/com/poderazul/spikesbot/TapSchedule.java tools/TapScheduleRegression.java
+          java -cp /tmp/spikes-tests br.com.poderazul.spikesbot.TapScheduleRegression
       - name: Compilar APK debug
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: SpikesBot-Kwai-v2.1-beta-APK
+          name: SpikesBot-Kwai-v2.2-beta-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

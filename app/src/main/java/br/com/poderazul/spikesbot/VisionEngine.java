@@ -16,15 +16,20 @@ final class VisionEngine {
         final boolean jump;
         final String description;
         final double birdX, birdY, targetY;
+        final int tapDelayMs, flightDirection;
+        final boolean canTap;
         Frame(boolean board, boolean bird, boolean jump, String description,
               double x, double y, double target) {
-            this.boardFound = board;
-            this.birdFound = bird;
-            this.jump = jump;
-            this.description = description;
-            this.birdX = x;
-            this.birdY = y;
-            this.targetY = target;
+            this(board,bird,jump,description,x,y,target,-1,0,false);
+        }
+        Frame(boolean board, boolean bird, boolean jump, String description,
+              double x, double y, double target,
+              int delay,int direction,boolean canTap) {
+            this.boardFound=board;this.birdFound=bird;this.jump=jump;
+            this.description=description;
+            this.birdX=x;this.birdY=y;this.targetY=target;
+            this.tapDelayMs=delay;this.flightDirection=direction;
+            this.canTap=canTap;
         }
     }
 
@@ -149,7 +154,8 @@ final class VisionEngine {
                 " • previsão "+(int)plan.noTapY+"/"+(int)plan.tapY+
                 " • ETA="+(int)(plan.wallSeconds*1000)+"ms"+
                 " • "+plan.reason;
-        return new Frame(true,true,plan.jump,status,bird.x,bird.y,plan.target);
+        return new Frame(true,true,plan.jump,status,bird.x,bird.y,plan.target,
+                plan.firstTapDelayMs,direction,plan.canTap);
     }
 
     private static boolean isSpikeRow(int[] pix, int w, int y, int x0, int x1,

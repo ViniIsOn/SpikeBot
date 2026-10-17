@@ -15,11 +15,15 @@ final class FlightLogic {
         final boolean hasCorridor, jump;
         final int target;
         final double noTapY, tapY, wallSeconds;
+        final int firstTapDelayMs;
+        final boolean canTap;
         final String reason;
         Plan(boolean found,boolean jump,int target,double noTapY,double tapY,
-             double seconds,String reason) {
+             double seconds,int firstTapDelayMs,boolean canTap,String reason) {
             this.hasCorridor=found; this.jump=jump; this.target=target;
             this.noTapY=noTapY; this.tapY=tapY; this.wallSeconds=seconds;
+            this.firstTapDelayMs=firstTapDelayMs;
+            this.canTap=canTap;
             this.reason=reason;
         }
     }
@@ -64,16 +68,19 @@ final class FlightLogic {
                 double flap=y+impulse*horizon+.5*gravity*horizon*horizon;
                 double reachable=Math.min(Math.abs(mid-coast),
                                           Math.abs(mid-flap));
-                double score=Math.abs(mid-center)*.50+
-                        Math.abs(mid-y)*.50+reachable*.30+
-                        Math.max(0,24-gap)*6;
+                double edgePenalty =
+                        Math.max(0, mid-(bottom-62))*1.6 +
+                        Math.max(0,(top+62)-mid)*1.6;
+                double score=Math.abs(mid-center)*.52+
+                        Math.abs(mid-y)*.30+reachable*.30+
+                        edgePenalty + Math.max(0,24-gap)*6;
                 if(score<bestLane){bestLane=score;target=mid;}
                 largestGap=Math.max(largestGap,gap);
                 from=-1;
             }
         }
         if(largestGap==0)
-            return new Plan(false,false,center,y,y,eta,
+            return new Plan(false,false,center,y,y,eta,-1,false,
                     "sem corredor confirmado");
 
         double since=sinceLastTapMs<0?999:sinceLastTapMs/1000.0;
@@ -83,7 +90,9 @@ final class FlightLogic {
             vy=Math.min(vy,impulse+gravity*since);
         // Typical Android gesture duration in the submitted log ~55ms.
         // Occasionally it is much longer; estimates are uncertain.
-        final double activationDelay=.055;
+        // A gesture may take 55ms normally but near the last collision
+        // completions were slower. Account for game response and UI latency.
+        final double activationDelay=.125;
 
         Candidate winner=evaluate(y,vy,gravity,impulse,eta,-1,0,0,
                 top,bottom,center,prefix,radius,scanTop,scanBottom,
@@ -103,17 +112,21 @@ final class FlightLogic {
         }
         // Dispatch the first action of the best plan only. Re-plan every
         // new frame rather than continuing a preprogrammed tap sequence.
-        boolean now=winner.taps>0 && winner.firstTap<=.135 &&
-                since>=.225;
-        if(y<top+24 || (vy< -h*.26 && y<center))now=false;
+        boolean canTap=!(y<top+27 || (vy< -h*.26 && y<center));
+        // An imminent floor danger takes precedence over "wait later".
+        double futureFloor=y+vy*.19+.5*gravity*.19*.19;
+        boolean floorDanger=futureFloor>bottom-26 && vy>h*.06;
+        int delay=winner.taps>0 ? (int)Math.round(winner.firstTap*1000) : -1;
+        if(floorDanger && canTap && since>=.22)delay=0;
+        boolean now=delay>=0 && delay<=80 && since>=.225 && canTap;
         double noTapY=y+vy*eta+.5*gravity*eta*eta;
         double tapY=y+impulse*eta+.5*gravity*eta*eta;
         String reason="trajeto "+winner.taps+" pulos, "+
                 (anySpike?"espinhos":"parede livre")+
-                ", primeiro="+(winner.taps>0?
-                (int)(winner.firstTap*1000)+"ms":"nenhum")+
+                ", primeiro="+(delay>=0?delay+"ms":"nenhum")+
                 ", custo="+(int)Math.min(99999,winner.cost);
-        return new Plan(true,now,target,noTapY,tapY,eta,reason);
+        return new Plan(true,now,target,noTapY,tapY,eta,
+                delay,canTap,reason);
     }
 
     private static Candidate evaluate(double y,double v,double gravity,
