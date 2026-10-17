@@ -229,7 +229,7 @@ public class SpikesService extends AccessibilityService {
             long cadence = Math.max(145L, 228L - prefs.getInt(Config.RATE, 65) / 2L);
             if (visionFlapSuggested && !gesturePending &&
                     lastVisionValidAt > 0 &&
-                    now - lastVisionValidAt < 330L &&
+                    now - lastVisionValidAt < 280L &&
                     now - lastGesture >= cadence) {
                 sendTap(false);
             }

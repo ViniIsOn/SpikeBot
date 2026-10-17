@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.0 beta 🐦
+# SpikesBot Kwai • v1.1 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -170,3 +170,19 @@ O relatório da v0.8 tinha 164 capturas, 70 válidas, 70 perdas do campo, 24 per
 
 ### Teste
 Escolha VISÃO AO VIVO, skin Verde e doces desativados. Autorize a captura de tela inteira, inicie o jogo e observe. Se o pássaro morrer, envie o painel de diagnóstico e preferencialmente um vídeo curto da partida. Essa versão compila, mas não é validação de jogabilidade em tempo real e não garante sobreviver a todos os espinhos.
+
+## v1.1 — trajeto previsto para a parede seguinte
+
+- O sistema não programa grupos fixos de 2/3/5 toques. Ele decide a cada quadro se precisa subir.
+- Extrapola brevemente a posição do pássaro pela velocidade observada nos quadros e por uma gravidade aproximada. É uma estimativa, não uma simulação fiel da física do jogo.
+- Usa velocidade horizontal e distância até a parede para estimar a altura de chegada; escolhe uma abertura maior que o pássaro na parede da direção atual.
+- Mantém teto/chão como limites permanentes, mesmo se a parede estiver momentaneamente sem espinhos.
+- Evita novos toques quando o pássaro está subindo rapidamente ou perto do teto. Antecipação de queda (180ms) para não esperar o contato com o chão.
+- Tenta preferir trajetos alcançáveis, sem priorizar doces sobre obstáculos.
+- Mostra direção, quantidade de linhas perigosas na parede, Y atual, Y alvo e chegada projetada no diagnóstico.
+- Excluiu decisões visuais com mais de 280ms na VISÃO AO VIVO para não continuar repetindo uma ação antiga depois de uma transição de tela.
+- **Diagnóstico da v1.0 do usuário:** 394 quadros, 251 válidos, 136 sem campo, 7 sem pássaro, 31 gestos concluídos e zero cancelamentos. Quadros perdidos podem incluir a transição quando volta ao próprio aplicativo. A falha principal já não é o envio dos gestos.
+- **Validação:** pode-se conferir a identificação das paredes com as quatro capturas fornecidas. Ainda não há vídeo com timestamps para medir a física real ou confirmar melhora de sobrevivência.
+
+### Experimento sugerido
+VISÃO AO VIVO, cor Verde, doces OFF e segurança 65%. Faça apenas algumas partidas. Se persistir a queda, envie um vídeo curto para estimar velocidade, impulso do pulo e posição exata das colisões. Não inferir sucesso apenas pela compilação.
