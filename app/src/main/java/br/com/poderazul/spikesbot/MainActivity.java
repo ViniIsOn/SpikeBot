@@ -90,6 +90,36 @@ public class MainActivity extends Activity {
         });
         look.addView(label("Ajuste conforme a skin usada. O bot reconhece a cor pela imagem, sem acessar arquivos do jogo.", 12, MUTED, false));
 
+        LinearLayout control = card(screen);
+        control.addView(label("TIPO DE CONTROLE", 12, CYAN, true));
+        Spinner controlMode = new Spinner(this);
+        String[] modeNames = {"CONTÍNUO — toques repetidos (teste)", "VISÃO — tenta desviar dos espinhos"};
+        ArrayAdapter<String> controlAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_dropdown_item, modeNames);
+        controlMode.setAdapter(controlAdapter);
+        controlMode.setSelection(Math.max(0, Math.min(1, prefs.getInt(Config.MODE, 0))));
+        control.addView(controlMode);
+        controlMode.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putInt(Config.MODE, position).apply();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        control.addView(label("CONTÍNUO envia vários toques por 60 segundos, mas NÃO evita espinhos e pode tocar menus. VISÃO usa capturas e pode deixar de tocar se não reconhecer o campo.", 12, MUTED, false));
+        int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
+        TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
+        addMargin(control, intervalText, 9, 0, 0, 0);
+        SeekBar intervalSeek = new SeekBar(this);
+        intervalSeek.setMax(120);
+        intervalSeek.setProgress((intervalInitial - 250) / 5);
+        control.addView(intervalSeek);
+        intervalSeek.setOnSeekBarChangeListener(listener(value -> {
+            int milliseconds = 250 + value * 5;
+            prefs.edit().putInt(Config.INTERVAL, milliseconds).apply();
+            intervalText.setText("Intervalo entre toques: " + milliseconds + " ms");
+        }));
+        control.addView(label("Começa após 4 segundos para dar tempo de abrir e iniciar a partida. Recomendo testar primeiro com 420 ms.", 12, MUTED, false));
+
         LinearLayout tuning = card(screen);
         tuning.addView(label("AJUSTES", 12, CYAN, true));
         TextView safetyText = label("Margem de segurança: " + prefs.getInt(Config.SAFETY, 65) + "%", 14, LIGHT, false);
@@ -121,13 +151,13 @@ public class MainActivity extends Activity {
         detailText = label("Nenhuma partida iniciada", 12, MUTED, false);
         addMargin(status, detailText, 6, 0, 0, 0);
 
-        startBtn = actionButton("▶ INICIAR NO JOGO", CYAN, BG);
+        startBtn = actionButton("▶ INICIAR BOT AUTOMÁTICO", CYAN, BG);
         addMargin(screen, startBtn, 12, 8, 0, 0);
         startBtn.setOnClickListener(v -> start());
         Button oneTap = actionButton("👆 TESTAR 1 TOQUE NO JOGO", 0xFF203A56, LIGHT);
         addMargin(screen, oneTap, 10, 0, 0, 0);
         oneTap.setOnClickListener(v -> testTap());
-        TextView testHelp = label("Envia só um toque no meio do jogo após abrir. Use para descobrir se a acessibilidade está funcionando. Não toca repetidamente.", 12, MUTED, false);
+        TextView testHelp = label("ATENÇÃO: o botão TESTAR envia exatamente UM toque. Para tocar repetidamente, selecione CONTÍNUO e pressione INICIAR BOT AUTOMÁTICO.", 12, MUTED, false);
         addMargin(screen, testHelp, 5, 0, 0, 0);
         Button stop = actionButton("■ PARAR O BOT", CARD, LIGHT);
         addMargin(screen, stop, 10, 0, 0, 0);
@@ -174,9 +204,14 @@ public class MainActivity extends Activity {
             catch (Exception ignored) { /* App Store not available. */ }
             return;
         }
-        prefs.edit().putBoolean(Config.RUN, true).putInt(Config.TAPS, 0)
+        prefs.edit().putBoolean(Config.RUN, true)
+                .putBoolean(Config.TEST_TAP, false)
+                .putLong(Config.SESSION_START, android.os.SystemClock.uptimeMillis())
+                .putInt(Config.TAPS, 0).putString(Config.STATS, "Iniciando sessão automática")
                 .putString(Config.LAST_ERROR, "").apply();
-        Config.status(this, "Iniciando… aguarde uma partida com espinhos laterais visíveis");
+        Config.status(this, prefs.getInt(Config.MODE, 0) == 0 ?
+                "Modo CONTÍNUO: abra a partida, repetições em 4 segundos" :
+                "Modo VISÃO: aguardando campo de jogo e pássaro reconhecíveis");
         game.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
         startActivity(game);
         refresh();
@@ -218,7 +253,7 @@ public class MainActivity extends Activity {
         detailText.setText(prefs.getString(Config.STATS, "Ative o bot e comece o modo clássico") +
                 (prefs.getString(Config.LAST_ERROR, "").isEmpty() ? "" :
                 "\nÚltima falha: " + prefs.getString(Config.LAST_ERROR, "")));
-        startBtn.setText(enabled ? "▶ INICIAR NO JOGO" : "⚙ ATIVAR ACESSIBILIDADE");
+        startBtn.setText(enabled ? "▶ INICIAR BOT AUTOMÁTICO" : "⚙ ATIVAR ACESSIBILIDADE");
     }
 
     @Override protected void onResume() {

@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.3 beta 🐦
+# SpikesBot Kwai • v0.4 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -74,3 +74,17 @@ O ícone agora é **vetorial XML**, desenhado com formas e cores, sem geração 
 - Por segurança, o botão INICIAR ainda exige que o usuário abra uma partida manualmente: o bot **não clica automaticamente em menus ou anúncios**.
 
 Esta versão tem compilação automatizada, mas ainda precisa de testes em um dispositivo real com o jogo instalado. Não há promessa de acerto perfeito nem garantia de que o jogo atual seja reconhecido visualmente. Se não houver movimento, teste o botão de um único toque e envie um print do campo jogável e os estados de **Capturas / campo / pássaro** exibidos na tela do SpikesBot.
+
+## v0.4 beta — solução para apenas um toque
+
+- **Diferença entre teste e automático:** o botão TESTAR 1 TOQUE sempre enviará apenas um gesto. O botão INICIAR BOT AUTOMÁTICO usa o modo selecionado.
+- **Novo modo CONTÍNUO:** envia toques repetidos com intervalos de 250–850ms (padrão 420ms) sem depender da visão do campo. Começa 4s após o início, somente enquanto o jogo original estiver em primeiro plano e encerra a sessão após 60s. É um teste de automatização, **não consegue desviar de espinhos**, e pode interagir com menus enquanto o jogo permanecer em primeiro plano. Acompanhe o teste.
+- **Modo VISÃO** ainda é experimental e exige campo/pássaro reconhecidos. Corrigida a avaliação das linhas de espinhos, que deixava linhas intercaladas vazias.
+- O START limpa um teste de toque pendente; o contador e o status exibem ações da sessão.
+- Não autorize acessibilidade de aplicativos de fontes desconhecidas. Este projeto não inclui bibliotecas externas de automação, dados remotos nem anúncios.
+
+### Teste sugerido
+1. Selecione **CONTÍNUO** e intervalo **420ms**.
+2. Pressione **INICIAR BOT AUTOMÁTICO**, abra/inicie manualmente a partida.
+3. Os toques começam após cerca de 4 segundos e prosseguem durante até 60 segundos, somente no jogo.
+4. Use **PARAR O BOT** ao terminar. Se o passarinho morrer, altere o intervalo ou mude para VISÃO e compartilhe capturas/status para calibrar, sem esperar acertos perfeitos.

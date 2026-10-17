@@ -13,6 +13,9 @@ final class Config {
     static final String SAFETY = "safety";
     static final String STATUS = "status";
     static final String STATS = "stats";
+    static final String MODE = "mode"; // 0: timed continuous, 1: visual experimental
+    static final String INTERVAL = "interval_ms";
+    static final String SESSION_START = "session_started";
     static final String TEST_TAP = "test_tap";
     static final String TEST_TIME = "test_time";
     static final String LAST_ERROR = "last_error";

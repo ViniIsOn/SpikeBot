@@ -60,7 +60,7 @@ final class VisionEngine {
         final int stride = Math.max(1, w / 65);
         int spikeEvidence = 0;
 
-        for (int y = minY; y < maxY; y += 2) {
+        for (int y = minY; y < maxY; y++) {
             int bg = colors[y * w + w / 2];
             int bgLuminance = brightness(bg);
             boolean left = isSpikeRow(colors, w, y, (int)(w * .03), (int)(w * .20), stride, bgLuminance);
@@ -110,7 +110,7 @@ final class VisionEngine {
         // Avoid top/bottom spikes regardless of settings.
         for (int y = (int) (h * .24); y <= (int) (h * .73); y += 4) {
             int danger = 0;
-            for (int k = Math.max(minY, y - radius); k < Math.min(maxY, y + radius); k += 2) {
+            for (int k = Math.max(minY, y - radius); k < Math.min(maxY, y + radius); k++) {
                 danger += nextWall[k];
             }
             if (danger > 0) continue;

@@ -24,6 +24,8 @@ import android.view.accessibility.AccessibilityNodeInfo;
 public class SpikesService extends AccessibilityService {
     private static final String TAG = "SpikesBot";
     private static final long CAPTURE_GAP_MS = 260;
+    private static final long TIMED_START_DELAY_MS = 4000;
+    private static final long TIMED_SESSION_LIMIT_MS = 60000;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final VisionEngine vision = new VisionEngine();
     private HandlerThread analysisThread;
@@ -34,6 +36,7 @@ public class SpikesService extends AccessibilityService {
     private volatile String lastWindowPackage = "";
     private volatile long lastCapture = 0;
     private volatile long lastGesture = 0;
+    private long lastTimedStatus = 0;
     private int frames = 0;
     private boolean wasActive = false;
 
@@ -99,7 +102,7 @@ public class SpikesService extends AccessibilityService {
     private final Runnable loop = new Runnable() {
         @Override public void run() {
             if (destroyed) return;
-            main.postDelayed(this, 120);
+            main.postDelayed(this, 65);
             try {
                 tick();
             } catch (RuntimeException error) {
@@ -136,7 +139,43 @@ public class SpikesService extends AccessibilityService {
             sendTap(true);
             return;
         }
-        if (!playing || screenshotPending || gesturePending) return;
+        if (!playing || gesturePending) return;
+
+        // Timed mode is deliberately separate from screen analysis. It proves that
+        // gestures can repeat and runs only while the original game is foreground.
+        // It is NOT a spike-avoidance mode and never runs indefinitely.
+        if (prefs.getInt(Config.MODE, 0) == 0) {
+            long start = prefs.getLong(Config.SESSION_START, 0L);
+            if (start <= 0) {
+                Config.status(this, "Inicie uma sessão no aplicativo SpikesBot");
+                return;
+            }
+            long elapsed = now - start;
+            if (elapsed > TIMED_SESSION_LIMIT_MS) {
+                prefs.edit().putBoolean(Config.RUN, false).apply();
+                Config.status(this, "Sessão de 60 segundos encerrada. Volte ao SpikesBot para reiniciar.");
+                return;
+            }
+            if (elapsed < TIMED_START_DELAY_MS) {
+                Config.status(this, "Modo contínuo: abra a partida; toques começam em " +
+                        ((TIMED_START_DELAY_MS - elapsed + 999) / 1000) + " s");
+                return;
+            }
+            int interval = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
+            if (!gesturePending && now - lastGesture >= interval) {
+                sendTap(false);
+            }
+            if (now - lastTimedStatus > 1000) {
+                lastTimedStatus = now;
+                int count = prefs.getInt(Config.TAPS, 0);
+                Config.status(this, "Modo contínuo ATIVO • toque a cada " + interval + " ms");
+                prefs.edit().putString(Config.STATS,
+                        "Toques enviados: " + count + " • tempo: " + (elapsed / 1000) +
+                        "/60 s • sem leitura de espinhos").apply();
+            }
+            return;
+        }
+        if (screenshotPending) return;
         // Android throttles accessibility screenshots. Slower, stable reads beat fast failures.
         long gap = CAPTURE_GAP_MS + (100 - prefs.getInt(Config.RATE, 65)) / 2;
         if (now - lastCapture < gap) return;
@@ -265,6 +304,7 @@ public class SpikesService extends AccessibilityService {
             if (w != null) w.post(() -> vision.tapWasSent(lastGesture));
         } else {
             gesturePending = false;
+            lastGesture = SystemClock.uptimeMillis(); // Avoid hammering Android on errors.
             Config.status(this, "Não foi possível enviar toque. Verifique a acessibilidade.");
         }
     }
