@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v2.0 beta 🐦
+# SpikesBot Kwai • v2.1 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -286,3 +286,17 @@ A caixa-preta v1.9 registrou **113 decisões**, **22 gestos enviados e concluíd
 **Limitação:** não existe garantia de pontuação ou sobrevivência infinitas num jogo com obstáculos variáveis e latência Android. A primeira meta é ultrapassar consistentemente os 14 pontos observados na v1.5, depois 30, 50, 100 e assim por diante. Modo DOCES pode continuar OFF até estabilidade.
 
 Para comparar: VISÃO AO VIVO / Verde / SEM doces / segurança 65%. Faça algumas partidas e compartilhe a caixa-preta se o piloto perder. Verifique as imagens do ZIP antes de enviá-lo.
+
+## v2.1 — planejador de múltiplos pulos, baseado em dados
+
+Na caixa-preta v2.0 fornecida pelo usuário, a última partida mostrava **9 pontos**. O diagnóstico registrou **27 gestos enviados e concluídos, nenhum cancelado**, e em dois casos próximos do fim os callbacks chegaram após 267 e 439ms. A visão estava detectando o pássaro; o planejamento de **apenas um pulo futuro** não era suficiente para alcançar um corredor distante.
+
+- O novo `FlightLogic` simula trajetórias que contêm de 0 a 6 pulos, com tempos iniciais e espaçamentos diferentes. Checa todo o percurso para detectar aproximação perigosa do teto e do chão e verifica a altura ao chegar à parede seguinte.
+- O app só **executa o primeiro pulo** do melhor plano, se for apropriado agora, e refaz a simulação a cada quadro novo. Não segue sequências fixas nem age fora do jogo.
+- Mantém margem de segurança do corpo do pássaro, cooldown para gestos recentes e estimativa de cerca de 55ms para execução (mas há variação real do Android).
+- Caso real de regressão: aos ~35.1s, x=186, y=308, o pássaro precisava alcançar uma passagem alta da parede esquerda. O teste usa as bandas de espinhos realmente vistas em `quadro_0000035098.jpg` e exige que o planejador comece a subir antes da chegada.
+- O registro atual é insuficiente para afirmar uma taxa de acerto real; o teste automatizado verifica decisões de situações conhecidas, não uma partida simulada fiel.
+- Preserva a captura contínua, caixa-preta e o modo CONTÍNUO. Sem promessa de sobrevivência infinita.
+
+### Teste real
+VISÃO AO VIVO, Verde, doces desligados, margem 65%. Teste três partidas e compartilhe a caixa-preta se ocorrer colisão. Compare a pontuação e o comportamento com os 9 pontos do registro v2.0 e com o melhor observado de 14 da v1.5.
