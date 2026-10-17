@@ -1,40 +1,41 @@
 package br.com.poderazul.spikesbot;
 
-/**
- * Run with a plain JDK before the Android build. Test representative flight
- * states taken from the user's 216x484 capture dimensions.
- */
+/** Real-size 216x484 regression cases, including hazard rows from v1.4 ZIP. */
 public final class FlightLogicRegression {
-    static FlightLogic.Plan plan(double x,double y,double vx,double vy,long sinceTap) {
-        return FlightLogic.choose(216,484,x,y,vx,vy,1,new int[484],90,392,65,sinceTap);
+    static FlightLogic.Plan empty(double x,double y,double vx,double vy,long since) {
+        return FlightLogic.choose(216,484,x,y,vx,vy,1,new int[484],89,392,65,since);
     }
-    static void check(boolean pass,String label) {
-        if(!pass) throw new AssertionError(label);
+    static void require(boolean ok,String test) {
+        if(!ok)throw new AssertionError(test);
     }
-    public static void main(String[] ignored) {
-        var falling=plan(100,285,135,155,500);
-        var climbing=plan(100,215,135,-215,500);
-        var ceiling=plan(100,126,135,-60,500);
-        var grounded=plan(100,337,135,200,500);
-        var recent=plan(100,285,135,155,40);
-        var central=plan(105,224,135,-15,500);
-        check(falling.hasCorridor && falling.jump,
-                "A falling bird above target must receive a new flap");
-        check(!climbing.jump,"Don't add flaps while rapidly climbing");
-        check(!ceiling.jump,"No flap near ceiling");
-        check(grounded.jump,"Anticipate floor collision");
-        check(!recent.jump,"No double-flap before prior impulse is visible");
-        check(central.hasCorridor,"Safe target must exist in empty wall");
-        check(falling.wallSeconds>.4 && falling.wallSeconds<.8,
-                "Time to wall must match observed horizontal speed");
-        // A wall with a center hazard requires selecting an alternative gap.
-        int[] blocked=new int[484];
-        for(int i=202;i<264;i++)blocked[i]=1;
-        var alternate=FlightLogic.choose(216,484,97,250,136,60,1,
-                blocked,90,392,65,500);
-        check(alternate.hasCorridor,"Alternative safe gap should be found");
-        check(alternate.target<185||alternate.target>280,
-                "Target must clear the wall spike band + bird radius");
-        System.out.println("7 SpikesBot physics regression tests passed.");
+    static int[] bands(int[][] ranges) {
+        int[] a=new int[484];
+        for(int[] pair:ranges)for(int y=pair[0];y<=pair[1];y++)a[y]=1;
+        return a;
+    }
+    public static void main(String[] args) {
+        var floor=empty(100,344,135,185,600);
+        var rising=empty(100,214,135,-230,600);
+        var roof=empty(100,126,135,-70,600);
+        var recent=empty(100,344,135,185,40);
+        var center=empty(100,228,135,0,600);
+        require(floor.hasCorridor && floor.jump,"fall near floor must be rescued");
+        require(!rising.jump,"do not flap while rising fast");
+        require(!roof.jump,"never flap near ceiling");
+        require(!recent.jump,"avoid a duplicate flap before physics responds");
+        require(center.hasCorridor && center.target>=215&&center.target<=240,"center of empty arena");
+        require(center.wallSeconds>.6&&center.wallSeconds<.9,"real horizontal speed, not inflated");
+        // Right wall from the user's box at 14.386s:
+        int[] right=bands(new int[][] {{197,206},{223,233},{276,286}});
+        var gap=FlightLogic.choose(216,484,107,265,135,50,1,right,89,392,65,400);
+        require(gap.hasCorridor,"find middle gap between real side-spike bands");
+        require(gap.target>=250 && gap.target<=259,
+                "choose MIDDLE of narrow gap, not y=249 touching its edge");
+        // If a spike suddenly fills the center, do not choose its rows.
+        int[] blocked=bands(new int[][] {{202,264}});
+        var avoid=FlightLogic.choose(216,484,97,250,136,60,1,blocked,89,392,65,500);
+        require(avoid.hasCorridor && (avoid.target<185 || avoid.target>285),
+                "find a different wall opening when middle is blocked");
+        System.out.println("SpikesBot v1.5: 9 physical and recorded-wall checks passed");
     }
 }

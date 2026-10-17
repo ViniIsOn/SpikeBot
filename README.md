@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.4 beta 🐦
+# SpikesBot Kwai • v1.5 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -227,3 +227,15 @@ A caixa-preta enviada contém 64 observações, 32 com campo e pássaro detectad
 - O modo CONTÍNUO permanece intacto; a caixa-preta ainda pode ser exportada após a partida.
 
 Teste VISÃO AO VIVO, pássaro Verde, doces desligados e margem 65%. Envie o ZIP da nova partida e compare os comandos SUBIR vs AGUARDAR. Não declare a precisão perfeita apenas por compilar.
+
+## v1.5 — corrigir alvo na borda da passagem
+
+A caixa-preta da v1.4 teve **89 registros** com 15 toques distribuídos em três partidas que chegaram a 2, 2 e 3 pontos. O detector enxergava os espinhos, mas a altura real na chegada não coincidiu com a prevista: uma parede tinha triângulos nas linhas 197–206, 223–233 e 276–286. O alvo anterior 249 estava quase encostado na área perigosa.
+
+- Agora o planejador divide os intervalos seguros em faixas contínuas e escolhe **o meio de cada passagem**, com margem adicional de 17–21 pixels para o corpo do pássaro.
+- Simula o custo de esperar, tocar imediatamente ou esperar de 80 a 480ms antes de tocar; a cada quadro refaz a decisão. Não existe programação de quantidade fixa de toques.
+- Verifica altura **ao longo** da trajetória até a parede, não apenas no final, e penaliza colisões nas paredes, no teto e no chão.
+- Protege a reação ao toque anterior por pelo menos 285ms, pois o quadro seguinte pode chegar antes de a nova subida aparecer.
+- Para **não gravar outras telas por acidente**, a caixa-preta só armazena JPEGs quando campo e pássaro foram reconhecidos. O compartilhamento do ZIP continua opcional e manual.
+- Os testes automáticos verificam casos de teto, chão, subida rápida, toque recente, velocidade medida e a geometria das faixas de espinhos registradas na v1.4.
+- O modo CONTÍNUO foi preservado. Ainda não há comprovação de sobrevivência longa; se falhar, compare o diagnóstico com partidas reais.

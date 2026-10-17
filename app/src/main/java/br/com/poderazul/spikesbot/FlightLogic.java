@@ -1,24 +1,26 @@
 package br.com.poderazul.spikesbot;
 
 /**
- * Pure-Java flight planner. Every suggestion comes from a detected live bird,
- * its observed motion, and the spike-free gap of the approaching wall.
- * There is no fixed number of taps and no background automation.
+ * Pure-Java predictive controller (v1.5).
+ * The inputs are measurements from the CURRENT GAME, not a fixed tap sequence.
+ *
+ * Primary fixes: select the MIDDLE of a safe opening, compare a flap now
+ * against short deliberate delays, and never score a trajectory as safe
+ * merely because its final height looks close to the target.
  */
 final class FlightLogic {
     static final double GRAVITY_PER_HEIGHT = 0.98;
     static final double FLAP_SPEED_PER_HEIGHT = -0.41;
+    static final double[] DELAYS = {0, .08, .16, .24, .32, .40, .48};
 
     static final class Plan {
         final boolean hasCorridor;
         final boolean jump;
         final int target;
-        final double noTapY;
-        final double tapY;
-        final double wallSeconds;
+        final double noTapY, tapY, wallSeconds;
         final String reason;
-        Plan(boolean found, boolean jump, int target,
-             double noTapY, double tapY, double eta, String reason) {
+        Plan(boolean found, boolean jump, int target, double noTapY,
+             double tapY, double eta, String reason) {
             this.hasCorridor=found; this.jump=jump; this.target=target;
             this.noTapY=noTapY; this.tapY=tapY;
             this.wallSeconds=eta; this.reason=reason;
@@ -28,97 +30,146 @@ final class FlightLogic {
     static Plan choose(int w,int h,double x,double y,double vx,double vy,
                        int direction,int[] spikes,int scanTop,int scanBottom,
                        int safety,long sinceLastTapMs) {
-        double gravity=h*GRAVITY_PER_HEIGHT;
-        double impulse=h*FLAP_SPEED_PER_HEIGHT;
-
-        // Calibrated from user's real CSV: 12 untouched flights measured
-        // approximately 96-159 pixels/sec across a 216px field (median 135).
-        double fallback=w*.625;
-        double speed=Math.abs(vx);
-        if(speed<w*.32) speed=fallback;
-        speed=Math.max(w*.43, Math.min(w*.88, speed));
-        double remaining=direction>0?(w*.92-x):(x-w*.08);
-        double eta=Math.max(.035, Math.min(1.05,remaining/speed));
-        // We can correct again before reaching a distant wall. For a
-        // decision NOW only forecast the upcoming 0.34 seconds.
-        double horizon=Math.max(.13, Math.min(.34,eta));
-        double noTapY=y+vy*horizon+.5*gravity*horizon*horizon;
-        double tapY=y+impulse*horizon+.5*gravity*horizon*horizon;
-        int top=(int)(h*.24), bottom=(int)(h*.76);
-        int center=(int)(h*.47);
-        int radius=Math.max(12,(int)(h*(.022+Math.max(0,Math.min(100,safety))*.00014)));
-
-        // Identify a single, action-independent target inside a gap which
-        // accommodates the entire bird, with extra margin for reaction time.
+        final double gravity=h*GRAVITY_PER_HEIGHT;
+        final double impulse=h*FLAP_SPEED_PER_HEIGHT;
+        final double fallbackSpeed=w*.625;
+        double horizontalSpeed=Math.abs(vx);
+        if(horizontalSpeed<w*.32)horizontalSpeed=fallbackSpeed;
+        horizontalSpeed=clamp(horizontalSpeed,w*.43,w*.90);
+        double distance=direction>0?(w*.92-x):(x-w*.08);
+        double eta=clamp(distance/horizontalSpeed,.035,1.35);
+        final int ceiling=(int)(h*.24), floor=(int)(h*.76);
+        final int center=(int)(h*.47);
+        final int margin=Math.max(17,(int)Math.round(h*(.027+clamp(safety,0,100)*.00017)));
         int[] prefix=new int[h+1];
         for(int i=0;i<h;i++)prefix[i+1]=prefix[i]+spikes[i];
-        int target=-1;
+
+        // For distant walls the exact ballistic trajectory is unreliable.
+        // Prefer broad clear lanes, but keep the current bird Y reachable.
+        double shortHorizon=Math.min(.45,eta);
+        double coasting=y+vy*shortHorizon+.5*gravity*shortHorizon*shortHorizon;
+        double flapping=y+impulse*shortHorizon+.5*gravity*shortHorizon*shortHorizon;
+        int target=selectLane(prefix,ceiling,floor,scanTop,scanBottom,
+                margin,center,y,coasting,flapping);
+        if(target<0) return new Plan(false,false,center,coasting,flapping,eta,"parede sem abertura segura");
+
+        // Predict the whole crossing at most 0.72s ahead: beyond that,
+        // the controller will receive several new frames to replan.
+        double forecast=Math.min(.72,eta);
+        double noFlapEnd=y+vy*forecast+.5*gravity*forecast*forecast;
+        double flapNowEnd=y+impulse*forecast+.5*gravity*forecast*forecast;
+
+        double waitScore=pathCost(y,vy,gravity,-1,forecast,
+                ceiling,floor,prefix,scanTop,scanBottom,margin,target,
+                eta<=.72);
+        double bestFlapScore=Double.POSITIVE_INFINITY;
+        double bestDelay=-1;
+        for(double delay:DELAYS) {
+            if(delay>forecast-.035)continue;
+            double score=pathCost(y,vy,gravity,delay,forecast,
+                    ceiling,floor,prefix,scanTop,scanBottom,margin,target,
+                    eta<=.72);
+            // Discourage extra taps and extremely delayed decisions.
+            score+=6+delay*6;
+            if(score<bestFlapScore){bestFlapScore=score;bestDelay=delay;}
+        }
+
+        // A floor fall must be addressed before a position-based controller
+        // can react in the next frame. The true position is never assumed
+        // safe just because a wall corridor exists.
+        boolean urgentFall=y+vy*.20+.5*gravity*.20*.20>floor-h*.045;
+        boolean ceilingThreat=y<ceiling+h*.038;
+        boolean risingFast=vy<-h*.25;
+
+        boolean jump=bestDelay>=0 && bestFlapScore+3<waitScore && bestDelay<=.085;
+        if(urgentFall && bestDelay>=0 && bestDelay<=.16 &&
+                bestFlapScore<waitScore+35) jump=true;
+        if(ceilingThreat)jump=false;
+        if(risingFast && !urgentFall)jump=false;
+
+        // The latest image often arrives before the previous tap's upward
+        // impulse shows in the sprite. Avoid double-flapping based on stale Y.
+        if(sinceLastTapMs>=0 && sinceLastTapMs<285)jump=false;
+
+        String reason=jump?"pulo necessario":
+                bestDelay>.085 && bestFlapScore+3<waitScore?
+                "aguardar momento do proximo pulo":
+                ceilingThreat?"proximo do teto":
+                risingFast?"subindo rapidamente":"corrigindo altitude";
+        return new Plan(true,jump,target,noFlapEnd,flapNowEnd,eta,reason);
+    }
+
+    /**
+     * Split all spike-free rows into consecutive LANES, then choose a lane
+     * centre. This removes the bug where the target sits exactly at the
+     * clearance threshold and the bird grazes the next triangle.
+     */
+    private static int selectLane(int[] prefix,int ceiling,int floor,
+                                  int scanTop,int scanBottom,int margin,
+                                  int center,double currentY,double coast,
+                                  double flap) {
+        int start=-1,chosen=-1;
         double best=Double.POSITIVE_INFINITY;
-        for(int candidate=top+radius/3;candidate<=bottom-radius/3;candidate+=2){
-            if(!clearAt(prefix,candidate,radius,scanTop,scanBottom)) continue;
-            // Center preference, safe-gap depth, and reachability.
-            // Avoid picking the exact no-tap projection as a moving target.
-            int wideRadius=radius+Math.max(5,h/55);
-            boolean wide=clearAt(prefix,candidate,wideRadius,scanTop,scanBottom);
-            double reachable=Math.min(Math.abs(candidate-noTapY),
-                                      Math.abs(candidate-tapY));
-            double cost=Math.abs(candidate-center)*.82
-                    +reachable*.13+Math.abs(candidate-y)*.09
-                    +(wide?0:14);
-            if(cost<best){best=cost;target=candidate;}
+        for(int y=ceiling+12;y<=floor-12+1;y++){
+            boolean clear=y<=floor-12 &&
+                    clearAt(prefix,y,margin,scanTop,scanBottom);
+            if(clear && start<0)start=y;
+            if((!clear || y==floor-12+1) && start>=0){
+                int end=y-1;
+                int midpoint=(start+end)/2;
+                int width=end-start+1;
+                double reachable=Math.min(Math.abs(midpoint-coast),Math.abs(midpoint-flap));
+                double score=Math.abs(midpoint-center)*.75 +
+                        Math.abs(midpoint-currentY)*.12 + reachable*.13 +
+                        Math.max(0,28-width)*1.5;
+                if(score<best) {best=score;chosen=midpoint;}
+                start=-1;
+            }
         }
-        if(target<0) {
-            return new Plan(false,false,center,noTapY,tapY,eta,"sem corredor");
-        }
-        // Compare two trajectories against the SAME target and roof/floor.
-        // Avoid rewarding "wait" for having chosen a perfect wait-only target.
-        double waitRisk=trajectoryRisk(y,vy,gravity,horizon,top,bottom);
-        double tapRisk=trajectoryRisk(y,impulse,gravity,horizon,top,bottom);
-        if(eta < .34) {
-            // Evaluate imminent contact with the wall using the real margin.
-            // Only compare a tap if it can still affect the crossing.
-            double atWallWait=y+vy*eta+.5*gravity*eta*eta;
-            double atWallTap=y+impulse*eta+.5*gravity*eta*eta;
-            if(!clearAt(prefix,(int)Math.round(atWallWait),radius,scanTop,scanBottom))
-                waitRisk+=150;
-            if(!clearAt(prefix,(int)Math.round(atWallTap),radius,scanTop,scanBottom))
-                tapRisk+=150;
-        }
-        double waitCost=Math.abs(noTapY-target)*1.2+waitRisk;
-        double tapCost=Math.abs(tapY-target)*1.2+tapRisk+11;
-        boolean ceilingThreat=y<top+h*.048;
-        boolean risingHard=vy< -h*.22;
-        boolean impendingFloor=y+vy*.19+.5*gravity*.19*.19>bottom-h*.055;
-        boolean wantsTap=tapCost+6 < waitCost;
-        if(impendingFloor && tapRisk < waitRisk) wantsTap=true;
-        // Don't undo an upward flap before the newest image shows its effect.
-        if(sinceLastTapMs>=0 && sinceLastTapMs<145) wantsTap=false;
-        if(ceilingThreat) wantsTap=false;
-        if(risingHard && !impendingFloor && waitRisk<160) wantsTap=false;
-        return new Plan(true,wantsTap,target,noTapY,tapY,eta,
-                wantsTap?"correção prevista":ceilingThreat?"teto próximo":
-                risingHard?"subindo":"altura acompanhada");
+        return chosen;
     }
 
-    private static boolean clearAt(int[] prefix,int y,int radius,
-                                    int top,int bottom) {
-        if(y<top+radius||y>=bottom-radius)return false;
-        int start=y-radius, finish=y+radius+1;
-        if(start<0||finish>=prefix.length)return false;
-        return prefix[finish]-prefix[start]==0;
+    /** Assess the entire path, both before and after a prospective delayed tap. */
+    private static double pathCost(double y,double speed,double gravity,
+                                   double tapDelay,double duration,
+                                   int ceiling,int floor,int[] prefix,
+                                   int scanTop,int scanBottom,int margin,
+                                   int target,boolean reachingWall) {
+        double afterTapY=0;
+        if(tapDelay>=0)
+            afterTapY=y+speed*tapDelay+.5*gravity*tapDelay*tapDelay;
+        double impulse=prefix.length*FLAP_SPEED_PER_HEIGHT;
+        double cost=0;
+        double endY=y;
+        // Sample intermediate elevations, not just the eventual landing point.
+        for(int i=1;i<=12;i++) {
+            double t=duration*i/12.0;
+            double position;
+            if(tapDelay<0 || t<tapDelay) {
+                position=y+speed*t+.5*gravity*t*t;
+            } else {
+                double d=t-tapDelay;
+                position=afterTapY+impulse*d+.5*gravity*d*d;
+            }
+            endY=position;
+            if(position<ceiling+12)cost+=500+(ceiling+12-position)*20;
+            if(position>floor-12)cost+=500+(position-(floor-12))*20;
+        }
+        cost+=Math.abs(endY-target)*1.08;
+        if(reachingWall) {
+            int wallRow=(int)Math.round(endY);
+            if(!clearAt(prefix,wallRow,margin,scanTop,scanBottom)) cost+=900;
+            else if(!clearAt(prefix,wallRow,margin+6,scanTop,scanBottom)) cost+=65;
+        }
+        return cost;
     }
 
-    private static double trajectoryRisk(double y,double speed,double g,
-                                          double time,int top,int bottom) {
-        double risk=0;
-        for(int i=1;i<=5;i++) {
-            double t=time*i/5.0;
-            double position=y+speed*t+.5*g*t*t;
-            double dTop=position-(top+11);
-            double dBottom=(bottom-11)-position;
-            if(dTop<0)risk+=140+(-dTop)*7;
-            if(dBottom<0)risk+=140+(-dBottom)*7;
-        }
-        return risk;
+    private static boolean clearAt(int[] prefix,int y,int radius,int scanTop,int scanBottom) {
+        if(y-radius<scanTop || y+radius+1>scanBottom) return false;
+        if(y-radius<0 || y+radius+1>=prefix.length) return false;
+        return prefix[y+radius+1]-prefix[y-radius]==0;
+    }
+    private static double clamp(double x,double low,double high) {
+        return Math.max(low,Math.min(high,x));
     }
 }

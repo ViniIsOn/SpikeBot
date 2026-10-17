@@ -40,7 +40,10 @@ final class FlightRecorder {
     static synchronized void capture(Context context, Bitmap frame,
                                      VisionEngine.Frame observation,
                                      long now, long session, int touchCount) {
-        if (session <= 0 || now - lastSavedAt < MIN_INTERVAL_MS) return;
+        // The diagnostic must NEVER save another app's screen or a
+        // transition away from the gameplay. Only valid game frames.
+        if (session <= 0 || !observation.boardFound || !observation.birdFound ||
+                now - lastSavedAt < MIN_INTERVAL_MS) return;
         File dir = directory(context);
         try {
             if (session != currentSession) {
