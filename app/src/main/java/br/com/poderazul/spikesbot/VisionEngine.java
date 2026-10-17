@@ -108,7 +108,7 @@ final class VisionEngine {
         // Select the widest spike-free window on the approaching wall.
         int[] nextWall = direction > 0 ? spikeR : spikeL;
         int radius = (int) (h * (.029 + safety * .00023));
-        int bestY = (int) (h * .49);
+        int bestY = (int) (h * .46);
         double bestCost = Double.POSITIVE_INFINITY;
         Blob candy = collectCandy ? findBlob(colors, w, h, 6, false) : null;
         boolean candyOnPath = candy != null &&
@@ -116,15 +116,20 @@ final class VisionEngine {
                  (direction < 0 && candy.x <= bird.x - w * .035));
 
         // Avoid top/bottom spikes regardless of settings.
-        for (int y = (int) (h * .24); y <= (int) (h * .73); y += 4) {
+        for (int y = (int) (h * .24); y <= (int) (h * .67); y += 4) {
             int danger = 0;
             for (int k = Math.max(minY, y - radius); k < Math.min(maxY, y + radius); k++) {
                 danger += nextWall[k];
             }
             if (danger > 0) continue;
-            double cost = Math.abs(y - bird.y) * .88 + Math.abs(y - h * .48) * .13;
-            // Prefer a safe candy path, but never overrule spike clearance.
-            if (candyOnPath) cost += Math.abs(y - candy.y) * .60;
+            // BUGFIX v0.6: the previous cost followed the bird's current Y.
+            // That made "bestY" move with the bird, so after one tap the
+            // controller often decided no further flap was needed.
+            // Keep a stable central altitude, then choose a gap near it.
+            double cost = Math.abs(y - h * .46) * 1.70 +
+                    Math.abs(y - bird.y) * .14;
+            // Candies are optional and NEVER override spike clearance.
+            if (candyOnPath) cost += Math.abs(y - candy.y) * .30;
             if (cost < bestCost) { bestCost = cost; bestY = y; }
         }
         if (Double.isInfinite(bestCost)) {
@@ -132,18 +137,21 @@ final class VisionEngine {
             return new Frame(true, true, false, "Sem corredor seguro reconhecível", bird.x, bird.y, bestY);
         }
 
-        final long minTapInterval = (long) (180 - rate * .62); // 180 .. 118 ms
-        final boolean cooledDown = timestamp - lastTapAt > minTapInterval;
-        final boolean nearBottom = bird.y > h * .67;
-        final boolean high = bird.y < h * .21;
-        // An upward-moving bird should be allowed to coast; a falling one needs a flap.
-        final boolean falling = vy > -h * .12;
-        final boolean belowCorridor = bird.y > bestY + h * .030;
-        final boolean approachingCorridor = bird.y > bestY - h * .020 && vy > h * .015;
-        boolean jump = cooledDown && !high &&
-                (nearBottom || (belowCorridor && falling) || approachingCorridor);
+        // Frame.jump now means "a flap is recommended", NOT "do a single
+        // immediate tap". The service owns repeated, rate-limited gestures.
+        // Screenshots may only arrive about every 250ms. We must keep a
+        // short-lived flap recommendation between two successful frames.
+        final boolean high = bird.y < h * .215;
+        final boolean falling = vy > -h * .075;
+        final boolean lowerThanTarget = bird.y > bestY + h * .018;
+        final boolean closeAndFalling = falling && bird.y > bestY - h * .030;
+        final boolean rhythmNeeded = bird.y > bestY - h * .055;
+        boolean jump = !high && (lowerThanTarget || closeAndFalling || rhythmNeeded);
 
-        String status = collectCandy && candyOnPath ? "Jogando • procurando doce" : "Jogando • evitando espinhos";
+        String status = (collectCandy && candyOnPath ?
+                "VISÃO • tentando coletar doce" : "VISÃO • controlando altitude") +
+                " • " + (jump ? "subir" : "aguardar") +
+                " • Y " + (int)bird.y + "→" + bestY;
         return new Frame(true, true, jump, status, bird.x, bird.y, bestY);
     }
 

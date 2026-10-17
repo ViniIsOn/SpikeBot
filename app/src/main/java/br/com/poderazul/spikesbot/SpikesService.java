@@ -36,6 +36,10 @@ public class SpikesService extends AccessibilityService {
     private volatile String lastWindowPackage = "";
     private volatile long lastCapture = 0;
     private volatile long lastGesture = 0;
+    // The worker sets these after seeing a LIVE bird and sidewall spikes.
+    // Stale decisions cannot keep tapping menus or a game-over screen.
+    private volatile long lastVisionValidAt = 0;
+    private volatile boolean visionFlapSuggested = false;
     private long lastTimedStatus = 0;
     private int frames = 0;
     private boolean wasActive = false;
@@ -43,6 +47,8 @@ public class SpikesService extends AccessibilityService {
     @Override protected void onServiceConnected() {
         super.onServiceConnected();
         destroyed = false;
+        visionFlapSuggested = false;
+        lastVisionValidAt = 0;
         analysisThread = new HandlerThread("SpikesBot-vision");
         analysisThread.start();
         worker = new Handler(analysisThread.getLooper());
@@ -120,11 +126,14 @@ public class SpikesService extends AccessibilityService {
                 wasActive = false;
                 frames = 0;
                 if (worker != null) worker.post(vision::reset);
+                visionFlapSuggested = false;
+                lastVisionValidAt = 0;
             }
             return;
         }
         wasActive = true;
         if (!Config.PACKAGE.equals(activePackage())) {
+            visionFlapSuggested = false;
             if (!screenshotPending) Config.status(this, "Aguardando o jogo original ficar em primeiro plano");
             return;
         }
@@ -174,6 +183,15 @@ public class SpikesService extends AccessibilityService {
                         "/60 s • sem leitura de espinhos").apply();
             }
             return;
+        }
+        // v0.6: keep the pilot responsive BETWEEN screenshots.
+        // A fresh detection lasts only 550ms. If visual tracking is lost,
+        // stop tapping instead of falling back to blind autoplay.
+        long visionCadence = Math.max(275, 405 - prefs.getInt(Config.RATE, 65) * 12L / 10L);
+        if (visionFlapSuggested && !gesturePending &&
+                lastVisionValidAt > 0 && now - lastVisionValidAt < 550 &&
+                now - lastGesture >= visionCadence) {
+            sendTap(false);
         }
         if (screenshotPending) return;
         // Android throttles accessibility screenshots. Slower, stable reads beat fast failures.
@@ -253,19 +271,26 @@ public class SpikesService extends AccessibilityService {
                 prefs.getInt(Config.SAFETY, 65), prefs.getInt(Config.RATE, 65),
                 SystemClock.uptimeMillis());
         frames++;
-        if (frames % 2 == 0 || !result.birdFound || !result.boardFound) {
+        boolean valid = result.birdFound && result.boardFound;
+        if (valid) {
+            lastVisionValidAt = SystemClock.uptimeMillis();
+            visionFlapSuggested = result.jump;
+        } else {
+            // One invalid image is enough to disarm. A new good frame
+            // automatically re-arms and avoids a frozen action loop.
+            visionFlapSuggested = false;
+        }
+        if (frames % 2 == 0 || !valid) {
             Config.status(this, result.description);
             prefs.edit().putString(Config.STATS,
-                    "Capturas: " + frames + " • campo: " + (result.boardFound ? "OK" : "não detectado") +
-                    " • pássaro: " + (result.birdFound ? "OK" : "não detectado") +
+                    "Capturas: " + frames + " • campo: " + (result.boardFound ? "OK" : "não") +
+                    " • pássaro: " + (result.birdFound ? "OK" : "não") +
+                    " • comando: " + (result.jump && valid ? "SUBIR" : "AGUARDAR") +
+                    " • Y: " + (int) result.birdY + "/" + (int) result.targetY +
                     " • toques: " + prefs.getInt(Config.TAPS, 0)).apply();
         }
-        if (!result.jump || !result.birdFound || !result.boardFound) return;
-        main.post(() -> {
-            if (destroyed || gesturePending || !Config.get(this).getBoolean(Config.RUN, false)) return;
-            if (SystemClock.uptimeMillis() - lastGesture < 95) return;
-            if (Config.PACKAGE.equals(activePackage())) sendTap(false);
-        });
+        // The next main-thread tick schedules taps. Never dispatch gestures
+        // from the image worker and never depend on a single frame callback.
     }
 
     private void sendTap(boolean manualTest) {

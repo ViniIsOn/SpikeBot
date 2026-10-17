@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("CONTÍNUO repete toques por 60 segundos, sem evitar espinhos. VISÃO (beta) analisa as capturas e só envia toques quando reconhece o pássaro e o campo. Para as capturas enviadas, selecione a cor VERDE.", 12, MUTED, false));
+        control.addView(label("CONTÍNUO: repete toques e não evita espinhos. VISÃO v0.6: acompanha a altitude e mantém pulos entre capturas enquanto o pássaro e os espinhos estiverem visíveis. Use cor Verde para sua skin.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);

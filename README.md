@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.5 beta 🐦
+# SpikesBot Kwai • v0.6 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -104,3 +104,13 @@ Esta versão tem compilação automatizada, mas ainda precisa de testes em um di
 3. Use **INICIAR BOT AUTOMÁTICO** e inicie uma partida.
 4. Depois de parar, veja **Capturas / campo / pássaro / toques** no status. Se não funcionar, envie esses números e um vídeo curto da partida.
 5. Para pausar completamente, pare o bot e desative a permissão de acessibilidade quando terminar.
+
+## v0.6 — corrigir o pulo único em VISÃO
+
+- **Causa encontrada:** a função de custo escolhia o alvo colado à posição atual do pássaro (`abs(y - bird.y)*.88`). Ao chegar ao alvo, o controlador deixava de solicitar novos pulos mesmo enquanto o pássaro caía.
+- Corrigido para um alvo estável próximo a 46% da tela, limitado aos corredores livres de espinhos; a coleta de doces continua opcional e subordinada à segurança.
+- O modo VISÃO agora calcula a recomendação em cada captura, **mas o serviço envia toques em cadência controlada entre capturas válidas** (aproximadamente 285–405ms, conforme a frequência). Isso evita depender do evento único de uma imagem.
+- Se o campo ou o pássaro deixar de ser reconhecido, a autorização para novos pulos é revogada imediatamente. Se as capturas travarem, a recomendação expira em **550ms**. Não há autoclicker infinito.
+- Status local mostra captura, campo, pássaro, comando SUBIR/AGUARDAR, posição Y e contador de toques. O modo CONTÍNUO não foi alterado.
+- Testes offline nos quatro screenshots já enviados: verde detectável nos quatro; alvo central livre calculado aproximadamente em y=223 numa imagem reduzida a 216×483. Esses testes estáticos não validam acertos em tempo real.
+- **Ainda experimental:** a física exata do voo não está modelada. Se o pássaro continuar morrendo, será preciso um vídeo curto da partida e os diagnósticos do status.
