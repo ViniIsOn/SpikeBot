@@ -82,26 +82,10 @@ final class FlightRecorder {
         }
     }
 
-    /** Timestamps of actual Android gestures, distinct from inferred frame decisions. */
-    static synchronized void logGesture(Context context,long now,long session,String kind) {
-        if(session<=0) return;
-        try {
-            File dir=directory(context);
-            if(!dir.exists()&&!dir.mkdirs())return;
-            File events=new File(dir,"gestos.csv");
-            boolean first=!events.exists();
-            try(FileWriter writer=new FileWriter(events,true)){
-                if(first)writer.write("tempo_ms;evento\n");
-                writer.write(Math.max(0,now-session)+";"+kind+"\n");
-            }
-        }catch(IOException ignored) { /* never interfere with game input */ }
-    }
-
     static synchronized File export(Context context) throws IOException {
         File dir = directory(context);
         File[] files = dir.listFiles((root, name) ->
-                name.endsWith(".jpg") || name.equals("decisoes.csv") ||
-                name.equals("gestos.csv"));
+                name.endsWith(".jpg") || name.equals("decisoes.csv"));
         if (files == null || files.length == 0) return null;
         File shared = new File(context.getCacheDir(), "shared_debug");
         if (!shared.exists() && !shared.mkdirs()) throw new IOException("Diretório temporário");
@@ -111,8 +95,8 @@ final class FlightRecorder {
             byte[] buffer = new byte[8192];
             String notice = "SpikesBot - Caixa-preta de teste\n" +
                     "Imagens JPEG espaçadas, NÃO vídeo MP4.\n" +
-                    "decisoes.csv: tempo em ms, estado da visão, salto sugerido e alvo.\n" +
-                    "gestos.csv: instantes em que o Android recebeu, concluiu ou cancelou toques.\n" +
+                    "decisoes.csv: tempo em ms desde o início da sessão; " +
+                    "pássaro, campo, comando de subir e altura alvo.\n" +
                     "As imagens podem conter notificações sobrepostas: revise antes de compartilhar.\n" +
                     "O app não envia nada sozinho.\n";
             zip.putNextEntry(new ZipEntry("LEIA-ME.txt"));

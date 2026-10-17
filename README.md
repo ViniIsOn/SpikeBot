@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.7 beta 🐦
+# SpikesBot Kwai • v1.8 — Recuperação 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -240,27 +240,23 @@ A caixa-preta da v1.4 teve **89 registros** com 15 toques distribuídos em três
 - Os testes automáticos verificam casos de teto, chão, subida rápida, toque recente, velocidade medida e a geometria das faixas de espinhos registradas na v1.4.
 - O modo CONTÍNUO foi preservado. Ainda não há comprovação de sobrevivência longa; se falhar, compare o diagnóstico com partidas reais.
 
-## v1.6 — antecipar ajustes antes dos espinhos (caso real de 14 pontos)
+## v1.8 Recuperação — restauração funcional
 
-Dados da caixa-preta enviada em 2026-10-17: 68 observações, 29 toques acumulados; placar 14. Na parede direita final, espinhos nas linhas 222–234, 248–260, 275–287, 301–313 e 328–339 (escala 216×484). O corredor seguro escolhido estava perto de Y=166, mas o pássaro avançou com Y=234 em x=69, Y=213 em x=115, e Y=214 em x=153. A v1.5 recomendou AGUARDAR nos dois primeiros e só SUBIR no terceiro, tarde demais para chegar à passagem alta.
+Esta versão retorna exatamente ao **núcleo de controle da v1.5**, a última versão que o usuário confirmou jogando até 14 pontos.
 
-- Controle preditivo de altitude: estima Y cerca de 190–290ms adiante e recomenda subir mais cedo quando o pássaro estiver abaixo do corredor da parede seguinte, inclusive em subidas lentas.
-- A decisão antecipa **a aproximação de uma parede espinhosa**, sem escolher números fixos de toques. Mantém o planejamento de trajetórias e escolha do centro das aberturas da v1.5.
-- Diminui a proteção de toque recente de 285ms para 225ms, sem autorizar toques próximos ao teto ou durante subida rápida.
-- 4 novos testes automatizados reproduzem as posições e faixas de espinhos do trecho final enviado, incluindo proteção contra batida no teto.
-- Não afirma controle perfeito ou pontuação garantida: impulso real, atraso do Android e novos padrões de espinhos ainda podem exigir calibração. CONTÍNUO e modo DOCES preservados.
+- `VisionEngine.java`, `FlightLogic.java`, `SpikesService.java` e `FlightRecorder.java` foram restaurados a partir do commit Git `d0817d6cfd777ec6d1dd810ae7913bd3abfac9cf`. O modo de captura contínua `LiveCaptureService.java` já estava idêntico ao da v1.5.
+- Remove o detector automático de overlay vermelho de derrota e o encerramento do serviço de captura incluídos na v1.7, que podem ter contribuído para a parada completa relatada.
+- Remove a instrumentação extra de gestos da v1.7. A caixa-preta original com capturas e decisões continua funcionando.
+- Não altera o applicationId nem o formato de preferências, para permitir atualizar o APK mantendo as configurações.
+- Os testes Java da v1.5 são executados novamente pelo GitHub Actions.
 
-Teste recomendado: VISÃO AO VIVO, skin Verde, sem doces, segurança 65%; compare a pontuação e, caso bata, envie um novo ZIP da caixa-preta. Revisar a tela antes de compartilhar imagens.
+**Importante:** essa reversão é para recuperar o funcionamento, não para aumentar o recorde. Nenhum resultado de partida real foi confirmado para esta compilação.
 
-## v1.7 — estabilizar após a regressão v1.6
+### Se o bot não tocar depois da atualização
+1. Abra SpikesBot, confira **VISÃO AO VIVO** e **Verde**, e toque em **PARAR O BOT** para limpar uma sessão antiga.
+2. Desative e reative o serviço de acessibilidade nas configurações do Android, somente se necessário e se confiar no APK.
+3. Volte ao app e toque **INICIAR BOT AUTOMÁTICO**; conceda nova permissão de captura de tela inteira.
+4. Inicie a partida no próprio jogo manualmente. A visão espera detectar movimento horizontal antes de enviar comandos.
+5. Se persistir, informe se ocorre fechamento forçado, falta de toques ou tela congelada; consulte STATUS / DIAGNÓSTICO.
 
-A caixa-preta da v1.6 registrou duas tentativas que chegaram a **8** e **1** pontos. A última imagem da primeira rodada mostra o pássaro ainda subindo ao se aproximar dos espinhos na parede direita. A antecipação agressiva inserida na v1.6 provavelmente aumentou os pulos indesejados.
-
-- **Reversão precisa:** `FlightLogic.java` foi restaurado diretamente do commit estável da v1.5, que alcançou 14 pontos. A correção agressiva da v1.6 foi inteiramente desativada. A v1.7 não promete pontuações superiores sem teste.
-- **Parada no fim de jogo:** uma grande sobreposição vermelha (placar, REPLAY e SHARE) é reconhecida e o bot para, em vez de continuar tocando e potencialmente reiniciar partidas sem autorização nova.
-- **Telemetria de gestos:** o ZIP da caixa-preta agora inclui `gestos.csv` com os momentos de envio, conclusão e cancelamento de toques. Diferente da coluna de decisões, são eventos de input reais. Nada é enviado automaticamente.
-- Um teste específico de reconhecimento do placar vermelho precisa ser validado no celular, pois outras skins/temas podem ter aparência diferente.
-- Modo CONTÍNUO, coleta opcional e captura autorizada são preservados.
-
-### Teste
-VISÃO AO VIVO, cor Verde, sem doces, segurança 65%. Faça uma partida; a expectativa é que pare na tela de pontuação e não reinicie. Compartilhe o ZIP apenas se desejar; revise as imagens antes. Nosso objetivo é tomar como base 14 pontos e evoluir com alterações menores e mensuráveis.
+Para melhorar a jogabilidade a partir daqui, uma próxima versão deverá incorporar testes de replay com a caixa-preta real; não confundir uma compilação bem-sucedida com piloto validado.

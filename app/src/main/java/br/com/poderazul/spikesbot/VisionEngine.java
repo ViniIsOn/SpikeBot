@@ -62,22 +62,6 @@ final class VisionEngine {
         int[] colors=new int[w*h];
         bitmap.getPixels(colors,0,w,0,0,w,h);
 
-        // Game-over displays a large bright RED central scoreboard and
-        // REPLAY/SHARE bars. Startup only uses small pink labels/icons.
-        // Threshold tested against samples from earlier shared black boxes.
-        int redPixels=0;
-        for(int yy=(int)(h*.24);yy<(int)(h*.70);yy+=2) {
-            for(int xx=(int)(w*.16);xx<(int)(w*.84);xx+=2) {
-                int c=colors[yy*w+xx];
-                int rr=(c>>16)&255,gg=(c>>8)&255,bb=c&255;
-                if(rr>175&&rr>gg*1.50&&rr>bb*1.35&&gg<140) redPixels++;
-            }
-        }
-        if(redPixels>1200) {
-            return new Frame(false,false,false,
-                    "FIM_DE_JOGO: placar vermelho detectado",0,0,0);
-        }
-
         int atX=(int)(w*.86);
         int roofDark=brightness(colors[(int)(h*.11)*w+atX]);
         int roofLight=brightness(colors[(int)(h*.25)*w+atX]);

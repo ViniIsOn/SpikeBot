@@ -36,6 +36,6 @@ public final class FlightLogicRegression {
         var avoid=FlightLogic.choose(216,484,97,250,136,60,1,blocked,89,392,65,500);
         require(avoid.hasCorridor && (avoid.target<185 || avoid.target>285),
                 "find a different wall opening when middle is blocked");
-        System.out.println("SpikesBot v1.7 (stable): 9 physical and recorded-wall checks passed");
+        System.out.println("SpikesBot v1.5: 9 physical and recorded-wall checks passed");
     }
 }
