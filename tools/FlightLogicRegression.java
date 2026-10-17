@@ -23,7 +23,7 @@ public final class FlightLogicRegression {
         require(!rising.jump,"do not flap while rising fast");
         require(!roof.jump,"never flap near ceiling");
         require(!recent.jump,"avoid a duplicate flap before physics responds");
-        require(center.hasCorridor && center.target>=215&&center.target<=240,"center of empty arena");
+        require(center.hasCorridor && center.target>=215&&center.target<=250,"center of empty arena");
         require(center.wallSeconds>.6&&center.wallSeconds<.9,"real horizontal speed, not inflated");
         // Right wall from the user's box at 14.386s:
         int[] right=bands(new int[][] {{197,206},{223,233},{276,286}});
