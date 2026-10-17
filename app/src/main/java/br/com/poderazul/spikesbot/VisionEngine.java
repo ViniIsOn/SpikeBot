@@ -89,8 +89,9 @@ final class VisionEngine {
             return new Frame(true, false, false, "Pássaro não encontrado. Escolha Verde na cor do pássaro.", 0, 0, 0);
         }
 
-        double dt = (timestamp - lastSeenAt) / 1000.0;
-        if (lastSeenAt > 0 && dt > .055 && dt < 1.3) {
+        long previousFrameAt = lastSeenAt;
+        double dt = (timestamp - previousFrameAt) / 1000.0;
+        if (previousFrameAt > 0 && dt > .055 && dt < 1.3) {
             double measuredVx = (bird.x - lastX) / dt;
             double measuredVy = (bird.y - lastY) / dt;
             // Smooth noisy detections. Jump causes abrupt vy changes.
@@ -141,16 +142,27 @@ final class VisionEngine {
         // immediate tap". The service owns repeated, rate-limited gestures.
         // Screenshots may only arrive about every 250ms. We must keep a
         // short-lived flap recommendation between two successful frames.
-        final boolean high = bird.y < h * .215;
-        final boolean falling = vy > -h * .075;
-        final boolean lowerThanTarget = bird.y > bestY + h * .018;
-        final boolean closeAndFalling = falling && bird.y > bestY - h * .030;
-        final boolean rhythmNeeded = bird.y > bestY - h * .055;
-        boolean jump = !high && (lowerThanTarget || closeAndFalling || rhythmNeeded);
+        // v0.7: vertical physics are important. The old "rhythmNeeded"
+        // sent another flap while the bird was still ASCENDING, which could
+        // push it into the top spikes in only two taps.
+        // Project position 140 ms forward (bounded for noisy velocities).
+        double futureY = bird.y + Math.max(-h * .08, Math.min(h * .08, vy * .14));
+        final boolean high = bird.y < h * .235;
+        final boolean descendingOrAtApex = previousFrameAt == 0 || dt >= 1.3 || vy > -h * .065;
+        final boolean dangerouslyLow = bird.y > h * .615;
+        final boolean belowSafeBand = futureY > bestY - h * .030;
+        final long interval = Math.max(245L, 335L - (rate * 55L / 100L));
+        final boolean cooldownDone = timestamp - lastTapAt >= interval;
+        boolean jump = cooldownDone && !high &&
+                (dangerouslyLow || (descendingOrAtApex && belowSafeBand));
 
+        String state = high ? "muito alto" :
+                !cooldownDone ? "aguardando intervalo" :
+                !descendingOrAtApex ? "subindo, sem novo toque" :
+                jump ? "queda: subir" : "altitude segura: aguardar";
         String status = (collectCandy && candyOnPath ?
-                "VISÃO • tentando coletar doce" : "VISÃO • controlando altitude") +
-                " • " + (jump ? "subir" : "aguardar") +
+                "VISÃO • doce opcional" : "VISÃO • altitude") +
+                " • " + state +
                 " • Y " + (int)bird.y + "→" + bestY;
         return new Frame(true, true, jump, status, bird.x, bird.y, bestY);
     }

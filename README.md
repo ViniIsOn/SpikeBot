@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.6 beta 🐦
+# SpikesBot Kwai • v0.7 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -114,3 +114,15 @@ Esta versão tem compilação automatizada, mas ainda precisa de testes em um di
 - Status local mostra captura, campo, pássaro, comando SUBIR/AGUARDAR, posição Y e contador de toques. O modo CONTÍNUO não foi alterado.
 - Testes offline nos quatro screenshots já enviados: verde detectável nos quatro; alvo central livre calculado aproximadamente em y=223 numa imagem reduzida a 216×483. Esses testes estáticos não validam acertos em tempo real.
 - **Ainda experimental:** a física exata do voo não está modelada. Se o pássaro continuar morrendo, será preciso um vídeo curto da partida e os diagnósticos do status.
+
+
+## v0.7 — diagnóstico e controle de altitude
+
+- O piloto VISÃO não envia mais pulos apenas porque o pássaro está perto da altura desejada: aguarda início de queda ou aproximação do ponto seguro. Duas batidas seguidas enquanto ainda estava subindo podiam fazê-lo encostar nos espinhos superiores.
+- **Diagnóstico persistente:** toques, gestos concluídos, cancelados, capturas válidas, pássaro/campo perdido, erros de captura, capturas travadas e motivo da última decisão; visível quando se volta ao app.
+- **Watchdog de captura:** se o callback não retornar em 1,7 s, tenta retomar a leitura em vez de permanecer bloqueado. Uma captura válida recente autoriza gestos apenas por até 780ms; não há modo contínuo oculto.
+- O modo CONTÍNUO que já funcionava permanece com a mesma lógica e intervalo.
+- A captura no modo VISÃO passa a aguardar um pouco mais entre quadros para evitar limites de frequência do Android.
+- **Limitação:** não existe vídeo de gameplay com logs sincronizados, portanto não foi comprovado que a causa dos 2 pulos é queda, perda de visão ou cancelamento de capturas. A tela de diagnóstico ajudará a identificar.
+
+**Teste:** selecione VISÃO, Verde, sem doces e taxa 65%. Inicie uma partida. Ao observar a parada, volte ao app e envie a seção "STATUS / DIAGNÓSTICO" inteira. Não mantenha dois auto clickers ativados ao mesmo tempo.

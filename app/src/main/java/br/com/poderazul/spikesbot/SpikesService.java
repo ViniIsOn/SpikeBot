@@ -23,7 +23,8 @@ import android.view.accessibility.AccessibilityNodeInfo;
  */
 public class SpikesService extends AccessibilityService {
     private static final String TAG = "SpikesBot";
-    private static final long CAPTURE_GAP_MS = 230;
+    private static final long CAPTURE_GAP_MS = 285;
+    private static final long CAPTURE_TIMEOUT_MS = 1700;
     private static final long TIMED_START_DELAY_MS = 4000;
     private static final long TIMED_SESSION_LIMIT_MS = 60000;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -40,6 +41,10 @@ public class SpikesService extends AccessibilityService {
     // Stale decisions cannot keep tapping menus or a game-over screen.
     private volatile long lastVisionValidAt = 0;
     private volatile boolean visionFlapSuggested = false;
+    private volatile long capturePendingSince = 0;
+    private volatile String lastVisionReason = "Sem quadro";
+    private volatile int goodFrames = 0, lostBirdFrames = 0, lostBoardFrames = 0, captureFailures = 0, gestureCancels = 0;
+    private volatile int gestureCompletions = 0, captureTimeouts = 0;
     private long lastTimedStatus = 0;
     private int frames = 0;
     private boolean wasActive = false;
@@ -49,6 +54,8 @@ public class SpikesService extends AccessibilityService {
         destroyed = false;
         visionFlapSuggested = false;
         lastVisionValidAt = 0;
+        capturePendingSince = 0;
+        lastVisionReason = "Aguardando primeira captura";
         analysisThread = new HandlerThread("SpikesBot-vision");
         analysisThread.start();
         worker = new Handler(analysisThread.getLooper());
@@ -128,6 +135,7 @@ public class SpikesService extends AccessibilityService {
                 if (worker != null) worker.post(vision::reset);
                 visionFlapSuggested = false;
                 lastVisionValidAt = 0;
+                capturePendingSince = 0;
             }
             return;
         }
@@ -187,9 +195,21 @@ public class SpikesService extends AccessibilityService {
         // v0.6: keep the pilot responsive BETWEEN screenshots.
         // A fresh detection lasts only 550ms. If visual tracking is lost,
         // stop tapping instead of falling back to blind autoplay.
-        long visionCadence = Math.max(275, 405 - prefs.getInt(Config.RATE, 65) * 12L / 10L);
+        // One pending screenshot can sometimes never call back. A watchdog
+        // recovers the capture loop instead of leaving the bot frozen.
+        if (screenshotPending && capturePendingSince > 0 &&
+                now - capturePendingSince > CAPTURE_TIMEOUT_MS) {
+            screenshotPending = false;
+            capturePendingSince = 0;
+            captureTimeouts++;
+            visionFlapSuggested = false;
+            lastVisionReason = "Captura travou; reiniciando leitura";
+            Config.status(this, lastVisionReason);
+            updateVisualStats(prefs);
+        }
+        long visionCadence = Math.max(280L, 340L - prefs.getInt(Config.RATE, 65) / 2L);
         if (visionFlapSuggested && !gesturePending &&
-                lastVisionValidAt > 0 && now - lastVisionValidAt < 550 &&
+                lastVisionValidAt > 0 && now - lastVisionValidAt < 780 &&
                 now - lastGesture >= visionCadence) {
             sendTap(false);
         }
@@ -198,6 +218,7 @@ public class SpikesService extends AccessibilityService {
         long gap = CAPTURE_GAP_MS + (100 - prefs.getInt(Config.RATE, 65)) / 2;
         if (now - lastCapture < gap) return;
         screenshotPending = true;
+        capturePendingSince = now;
         lastCapture = now;
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, runnable -> {
@@ -213,10 +234,13 @@ public class SpikesService extends AccessibilityService {
                         problem("memória da captura", oom);
                     } finally {
                         screenshotPending = false;
+                        capturePendingSince = 0;
                     }
                 }
                 @Override public void onFailure(int code) {
                     screenshotPending = false;
+                    capturePendingSince = 0;
+                    captureFailures++;
                     String hint;
                     switch (code) {
                         case ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT:
@@ -228,12 +252,17 @@ public class SpikesService extends AccessibilityService {
                             break;
                         default: hint = "Falha de captura do sistema";
                     }
-                    Config.status(SpikesService.this, hint + " (código " + code + ")");
+                    lastVisionReason = hint + " (" + code + ")";
+                    Config.status(SpikesService.this, lastVisionReason);
+                    updateVisualStats(prefs);
                 }
             });
         } catch (RuntimeException error) {
             screenshotPending = false;
+            capturePendingSince = 0;
+            captureFailures++;
             problem("solicitar captura", error);
+            updateVisualStats(prefs);
         }
     }
 
@@ -273,24 +302,38 @@ public class SpikesService extends AccessibilityService {
         frames++;
         boolean valid = result.birdFound && result.boardFound;
         if (valid) {
+            goodFrames++;
             lastVisionValidAt = SystemClock.uptimeMillis();
             visionFlapSuggested = result.jump;
         } else {
-            // One invalid image is enough to disarm. A new good frame
-            // automatically re-arms and avoids a frozen action loop.
+            if (!result.boardFound) lostBoardFrames++;
+            else if (!result.birdFound) lostBirdFrames++;
+            // Stop when a full image proves tracking was lost.
             visionFlapSuggested = false;
         }
+        lastVisionReason = result.description;
         if (frames % 2 == 0 || !valid) {
             Config.status(this, result.description);
-            prefs.edit().putString(Config.STATS,
-                    "Capturas: " + frames + " • campo: " + (result.boardFound ? "OK" : "não") +
-                    " • pássaro: " + (result.birdFound ? "OK" : "não") +
-                    " • comando: " + (result.jump && valid ? "SUBIR" : "AGUARDAR") +
-                    " • Y: " + (int) result.birdY + "/" + (int) result.targetY +
-                    " • toques: " + prefs.getInt(Config.TAPS, 0)).apply();
+            updateVisualStats(prefs);
         }
         // The next main-thread tick schedules taps. Never dispatch gestures
         // from the image worker and never depend on a single frame callback.
+    }
+
+    private void updateVisualStats(SharedPreferences prefs) {
+        long age = lastVisionValidAt == 0 ? -1 :
+                SystemClock.uptimeMillis() - lastVisionValidAt;
+        prefs.edit().putString(Config.STATS,
+                "Toques: " + prefs.getInt(Config.TAPS, 0) +
+                " • gestos OK: " + gestureCompletions +
+                " • cancelados: " + gestureCancels +
+                "\nCapturas: " + frames + " • válidas: " + goodFrames +
+                " • pássaro perdido: " + lostBirdFrames +
+                " • campo perdido: " + lostBoardFrames +
+                "\nFalhas de captura: " + captureFailures +
+                " • capturas travadas: " + captureTimeouts +
+                " • último quadro válido: " + age + " ms" +
+                "\nDecisão: " + lastVisionReason).apply();
     }
 
     private void sendTap(boolean manualTest) {
@@ -310,12 +353,15 @@ public class SpikesService extends AccessibilityService {
             submitted = dispatchGesture(gesture, new GestureResultCallback() {
                 @Override public void onCompleted(GestureDescription description) {
                     gesturePending = false;
+                    gestureCompletions++;
                     if (manualTest) Config.status(SpikesService.this,
                             "TESTE: toque enviado ao jogo. O pássaro reagiu?");
                 }
                 @Override public void onCancelled(GestureDescription description) {
                     gesturePending = false;
-                    Config.status(SpikesService.this, "Toque cancelado pelo sistema");
+                    gestureCancels++;
+                    lastVisionReason = "Gesto cancelado pelo Android";
+                    Config.status(SpikesService.this, lastVisionReason);
                 }
             }, main);
         } catch (RuntimeException e) {
