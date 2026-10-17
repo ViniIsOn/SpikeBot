@@ -1,0 +1,235 @@
+package br.com.poderazul.spikesbot;
+
+import android.graphics.Bitmap;
+import android.graphics.Color;
+
+import java.util.ArrayDeque;
+
+/**
+ * Image-only heuristic controller for classic Don't Touch The Spikes.
+ * All units refer to the resized screenshot, no copyrighted game resources are bundled.
+ * Experimental: game updates/skins may require changing calibration.
+ */
+final class VisionEngine {
+    static final class Frame {
+        final boolean boardFound;
+        final boolean birdFound;
+        final boolean jump;
+        final String description;
+        final double birdX, birdY, targetY;
+        Frame(boolean board, boolean bird, boolean jump, String description,
+              double x, double y, double target) {
+            this.boardFound = board;
+            this.birdFound = bird;
+            this.jump = jump;
+            this.description = description;
+            this.birdX = x;
+            this.birdY = y;
+            this.targetY = target;
+        }
+    }
+
+    private static final class Blob {
+        double x, y;
+        int count;
+        int minX, minY, maxX, maxY;
+        Blob(int sx, int sy) { minX = maxX = sx; minY = maxY = sy; }
+    }
+    private double lastX = -1, lastY = -1, vx = 0, vy = 0;
+    private long lastSeenAt = 0, lastTapAt = 0;
+    private int direction = 1; // 1 is going right
+
+    void reset() {
+        lastX = -1; lastY = -1; vx = vy = 0;
+        lastSeenAt = 0; lastTapAt = 0; direction = 1;
+    }
+
+    void tapWasSent(long at) { lastTapAt = at; }
+
+    Frame analyze(Bitmap bitmap, int birdColor, boolean collectCandy, int safety,
+                  int rate, long timestamp) {
+        final int w = bitmap.getWidth(), h = bitmap.getHeight();
+        if (w < 100 || h < 200) {
+            return new Frame(false, false, false, "Resolução muito pequena", 0, 0, 0);
+        }
+        int[] colors = new int[w * h];
+        bitmap.getPixels(colors, 0, w, 0, 0, w, h);
+
+        int[] spikeL = new int[h];
+        int[] spikeR = new int[h];
+        final int minY = (int) (0.14 * h), maxY = (int) (0.84 * h);
+        final int stride = Math.max(1, w / 65);
+        int spikeEvidence = 0;
+
+        for (int y = minY; y < maxY; y += 2) {
+            int bg = colors[y * w + w / 2];
+            int bgLuminance = brightness(bg);
+            boolean left = isSpikeRow(colors, w, y, (int)(w * .03), (int)(w * .20), stride, bgLuminance);
+            boolean right = isSpikeRow(colors, w, y, (int)(w * .80), (int)(w * .97), stride, bgLuminance);
+            spikeL[y] = left ? 1 : 0;
+            spikeR[y] = right ? 1 : 0;
+            if (left || right) spikeEvidence++;
+        }
+        // The start menu has spikes at top/bottom but not normally on both side walls.
+        // Never tap automatically until the playing field is recognizable.
+        boolean board = spikeEvidence > (maxY - minY) / 32;
+        if (!board) {
+            return new Frame(false, false, false, "Aguardando partida (espinhos laterais não detectados)", 0, 0, 0);
+        }
+
+        Blob bird = findBlob(colors, w, h, birdColor, true);
+        if (bird == null) {
+            return new Frame(true, false, false, "Pássaro não encontrado; confira a cor escolhida", 0, 0, 0);
+        }
+
+        double dt = (timestamp - lastSeenAt) / 1000.0;
+        if (lastSeenAt > 0 && dt > .055 && dt < 1.3) {
+            double measuredVx = (bird.x - lastX) / dt;
+            double measuredVy = (bird.y - lastY) / dt;
+            // Smooth noisy detections. Jump causes abrupt vy changes.
+            vx = vx * .28 + measuredVx * .72;
+            vy = vy * .28 + measuredVy * .72;
+            if (measuredVx > w * .08) direction = 1;
+            if (measuredVx < -w * .08) direction = -1;
+        }
+        if (bird.x < w * .18 && vx >= 0) direction = 1;
+        if (bird.x > w * .82 && vx <= 0) direction = -1;
+        lastX = bird.x;
+        lastY = bird.y;
+        lastSeenAt = timestamp;
+
+        // Select the widest spike-free window on the approaching wall.
+        int[] nextWall = direction > 0 ? spikeR : spikeL;
+        int radius = (int) (h * (.029 + safety * .00023));
+        int bestY = (int) (h * .49);
+        double bestCost = Double.POSITIVE_INFINITY;
+        Blob candy = collectCandy ? findBlob(colors, w, h, 6, false) : null;
+        boolean candyOnPath = candy != null &&
+                ((direction > 0 && candy.x >= bird.x + w * .035) ||
+                 (direction < 0 && candy.x <= bird.x - w * .035));
+
+        // Avoid top/bottom spikes regardless of settings.
+        for (int y = (int) (h * .24); y <= (int) (h * .73); y += 4) {
+            int danger = 0;
+            for (int k = Math.max(minY, y - radius); k < Math.min(maxY, y + radius); k += 2) {
+                danger += nextWall[k];
+            }
+            if (danger > 0) continue;
+            double cost = Math.abs(y - bird.y) * .88 + Math.abs(y - h * .48) * .13;
+            // Prefer a safe candy path, but never overrule spike clearance.
+            if (candyOnPath) cost += Math.abs(y - candy.y) * .60;
+            if (cost < bestCost) { bestCost = cost; bestY = y; }
+        }
+        if (Double.isInfinite(bestCost)) {
+            // No convincing free window: do not invent a safe path.
+            return new Frame(true, true, false, "Sem corredor seguro reconhecível", bird.x, bird.y, bestY);
+        }
+
+        final long minTapInterval = (long) (180 - rate * .62); // 180 .. 118 ms
+        final boolean cooledDown = timestamp - lastTapAt > minTapInterval;
+        final boolean nearBottom = bird.y > h * .72;
+        final boolean high = bird.y < h * .23;
+        // An upward-moving bird should be allowed to coast; a falling one needs a flap.
+        final boolean falling = vy > -h * .12;
+        final boolean belowCorridor = bird.y > bestY + h * .030;
+        final boolean approachingCorridor = bird.y > bestY - h * .020 && vy > h * .015;
+        boolean jump = cooledDown && !high &&
+                (nearBottom || (belowCorridor && falling) || approachingCorridor);
+
+        String status = collectCandy && candyOnPath ? "Jogando • procurando doce" : "Jogando • evitando espinhos";
+        return new Frame(true, true, jump, status, bird.x, bird.y, bestY);
+    }
+
+    private static boolean isSpikeRow(int[] pix, int w, int y, int x0, int x1,
+                                      int stride, int background) {
+        int n = 0, dark = 0;
+        for (int x = x0; x < x1; x += stride) {
+            int c = pix[y * w + x];
+            int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
+            int lum = (r * 3 + g * 6 + b) / 10;
+            if (Math.abs(r-g) < 37 && Math.abs(g-b) < 37 &&
+                    lum < Math.min(202, background - 26)) dark++;
+            n++;
+        }
+        return n > 0 && dark >= Math.max(2, (int) Math.ceil(n * .32));
+    }
+
+    private static int brightness(int c) {
+        return (Color.red(c) * 3 + Color.green(c) * 6 + Color.blue(c)) / 10;
+    }
+
+    private static boolean matches(int c, int kind) {
+        int r = Color.red(c), g = Color.green(c), b = Color.blue(c);
+        switch (kind) {
+            case 0: // Rosa Ketchapp, bright pink/magenta
+                return r > 155 && g < 165 && r > g * 1.44 && b > 36 && r > b * 1.05;
+            case 1: // Azul
+                return b > 120 && b > r * 1.28 && (b > g * 1.06 || g > r * 1.35);
+            case 2: // Roxo
+                return b > 99 && r > 65 && b > g * 1.35 && r > g * 1.30;
+            case 3: // Verde
+                return g > 115 && g > r * 1.28 && g > b * 1.09;
+            case 4: // Escuro (usar somente nas capturas sem fundo escuro)
+                return r < 85 && g < 85 && b < 93;
+            case 5: // Vermelho
+                return r > 140 && g < 110 && b < 115 && r > 1.55 * g;
+            case 6: // Laranja dos doces
+                return r > 165 && g > 64 && g < 220 && b < 115 && r > g * 1.15 && g > b * 1.28;
+            default: return false;
+        }
+    }
+
+    private Blob findBlob(int[] pix, int w, int h, int kind, boolean birdSearch) {
+        int xMin = (int) (w * (birdSearch ? .18 : .10));
+        int xMax = (int) (w * (birdSearch ? .82 : .90));
+        int yMin = (int) (h * .18), yMax = (int) (h * .79);
+        int total = w * h;
+        byte[] mask = new byte[total];
+        // Build a mask only for the center part of the playfield.
+        for (int y = yMin; y < yMax; y++) {
+            int base = y * w;
+            for (int x = xMin; x < xMax; x++) {
+                if (matches(pix[base + x], kind)) mask[base + x] = 1;
+            }
+        }
+        Blob best = null;
+        double bestValue = -1e12;
+        ArrayDeque<Integer> flood = new ArrayDeque<>();
+        for (int y = yMin; y < yMax; y++) {
+            for (int x = xMin; x < xMax; x++) {
+                int start = y*w + x;
+                if (mask[start] != 1) continue;
+                mask[start] = 2;
+                Blob blob = new Blob(x,y);
+                long sumX = 0, sumY = 0;
+                flood.add(start);
+                while (!flood.isEmpty()) {
+                    int p = flood.removeFirst();
+                    int px = p % w, py = p / w;
+                    blob.count++;
+                    sumX += px; sumY += py;
+                    if (px < blob.minX) blob.minX = px;
+                    if (px > blob.maxX) blob.maxX = px;
+                    if (py < blob.minY) blob.minY = py;
+                    if (py > blob.maxY) blob.maxY = py;
+                    if (px > xMin && mask[p-1] == 1) { mask[p-1]=2; flood.add(p-1); }
+                    if (px+1 < xMax && mask[p+1] == 1) { mask[p+1]=2; flood.add(p+1); }
+                    if (py > yMin && mask[p-w] == 1) { mask[p-w]=2; flood.add(p-w); }
+                    if (py+1 < yMax && mask[p+w] == 1) { mask[p+w]=2; flood.add(p+w); }
+                }
+                if (blob.count < (birdSearch ? 18 : 7) || blob.count > (birdSearch ? 1700 : 600)) continue;
+                double width = blob.maxX - blob.minX + 1, height = blob.maxY - blob.minY + 1;
+                if (width / height < .38 || width / height > 2.65) continue;
+                blob.x = (double) sumX / blob.count;
+                blob.y = (double) sumY / blob.count;
+                double proximity = lastX >= 0 && birdSearch ?
+                        Math.hypot(blob.x - lastX, blob.y - lastY) : 0;
+                double value = blob.count * 1.4 - proximity * (birdSearch ? .9 : 0);
+                // Center field is less likely to contain menu controls than the borders.
+                if (birdSearch && lastX < 0) value -= Math.abs(blob.x - w * .50) * .15;
+                if (value > bestValue) { bestValue = value; best = blob; }
+            }
+        }
+        return best;
+    }
+}
