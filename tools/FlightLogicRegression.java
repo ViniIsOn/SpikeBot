@@ -36,6 +36,25 @@ public final class FlightLogicRegression {
         var avoid=FlightLogic.choose(216,484,97,250,136,60,1,blocked,89,392,65,500);
         require(avoid.hasCorridor && (avoid.target<185 || avoid.target>285),
                 "find a different wall opening when middle is blocked");
-        System.out.println("SpikesBot v1.5: 9 physical and recorded-wall checks passed");
+        // Reproduce the v1.5 failure: 14 points, target near y=166,
+        // right wall with five lower spike bands, 3 consecutive frames.
+        int[] lateWall=bands(new int[][] {
+            {222,234},{248,260},{275,287},{301,313},{328,339}
+        });
+        var early=FlightLogic.choose(216,484,69,234,135,170,1,
+                lateWall,89,392,65,600);
+        var middle=FlightLogic.choose(216,484,115,213,135,-70,1,
+                lateWall,89,392,65,420);
+        var tooLate=FlightLogic.choose(216,484,153,214,135,3,1,
+                lateWall,89,392,65,420);
+        require(early.hasCorridor && early.target<200 && early.jump,
+                "Start climbing when the safe next-wall lane is high");
+        require(middle.jump,
+                "Maintain climb while approaching spikes instead of waiting twice");
+        require(tooLate.jump,"Correct altitude before right-wall contact");
+        var nearRoof=FlightLogic.choose(216,484,153,135,135,-70,1,
+                lateWall,89,392,65,420);
+        require(!nearRoof.jump,"Protect top spikes while correcting wall approach");
+        System.out.println("SpikesBot v1.6: 13 flight and recorded-wall checks passed");
     }
 }

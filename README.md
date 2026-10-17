@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.5 beta 🐦
+# SpikesBot Kwai • v1.6 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -239,3 +239,15 @@ A caixa-preta da v1.4 teve **89 registros** com 15 toques distribuídos em três
 - Para **não gravar outras telas por acidente**, a caixa-preta só armazena JPEGs quando campo e pássaro foram reconhecidos. O compartilhamento do ZIP continua opcional e manual.
 - Os testes automáticos verificam casos de teto, chão, subida rápida, toque recente, velocidade medida e a geometria das faixas de espinhos registradas na v1.4.
 - O modo CONTÍNUO foi preservado. Ainda não há comprovação de sobrevivência longa; se falhar, compare o diagnóstico com partidas reais.
+
+## v1.6 — antecipar ajustes antes dos espinhos (caso real de 14 pontos)
+
+Dados da caixa-preta enviada em 2026-10-17: 68 observações, 29 toques acumulados; placar 14. Na parede direita final, espinhos nas linhas 222–234, 248–260, 275–287, 301–313 e 328–339 (escala 216×484). O corredor seguro escolhido estava perto de Y=166, mas o pássaro avançou com Y=234 em x=69, Y=213 em x=115, e Y=214 em x=153. A v1.5 recomendou AGUARDAR nos dois primeiros e só SUBIR no terceiro, tarde demais para chegar à passagem alta.
+
+- Controle preditivo de altitude: estima Y cerca de 190–290ms adiante e recomenda subir mais cedo quando o pássaro estiver abaixo do corredor da parede seguinte, inclusive em subidas lentas.
+- A decisão antecipa **a aproximação de uma parede espinhosa**, sem escolher números fixos de toques. Mantém o planejamento de trajetórias e escolha do centro das aberturas da v1.5.
+- Diminui a proteção de toque recente de 285ms para 225ms, sem autorizar toques próximos ao teto ou durante subida rápida.
+- 4 novos testes automatizados reproduzem as posições e faixas de espinhos do trecho final enviado, incluindo proteção contra batida no teto.
+- Não afirma controle perfeito ou pontuação garantida: impulso real, atraso do Android e novos padrões de espinhos ainda podem exigir calibração. CONTÍNUO e modo DOCES preservados.
+
+Teste recomendado: VISÃO AO VIVO, skin Verde, sem doces, segurança 65%; compare a pontuação e, caso bata, envie um novo ZIP da caixa-preta. Revisar a tela antes de compartilhar imagens.
