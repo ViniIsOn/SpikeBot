@@ -124,10 +124,15 @@ public class MainActivity extends Activity {
         startBtn = actionButton("▶ INICIAR NO JOGO", CYAN, BG);
         addMargin(screen, startBtn, 12, 8, 0, 0);
         startBtn.setOnClickListener(v -> start());
+        Button oneTap = actionButton("👆 TESTAR 1 TOQUE NO JOGO", 0xFF203A56, LIGHT);
+        addMargin(screen, oneTap, 10, 0, 0, 0);
+        oneTap.setOnClickListener(v -> testTap());
+        TextView testHelp = label("Envia só um toque no meio do jogo após abrir. Use para descobrir se a acessibilidade está funcionando. Não toca repetidamente.", 12, MUTED, false);
+        addMargin(screen, testHelp, 5, 0, 0, 0);
         Button stop = actionButton("■ PARAR O BOT", CARD, LIGHT);
         addMargin(screen, stop, 10, 0, 0, 0);
         stop.setOnClickListener(v -> {
-            prefs.edit().putBoolean(Config.RUN, false).apply();
+            prefs.edit().putBoolean(Config.RUN, false).putBoolean(Config.TEST_TAP, false).apply();
             Config.status(this, "Bot parado pelo usuário");
             refresh();
             Toast.makeText(this, "Bot desligado", Toast.LENGTH_SHORT).show();
@@ -169,11 +174,32 @@ public class MainActivity extends Activity {
             catch (Exception ignored) { /* App Store not available. */ }
             return;
         }
-        prefs.edit().putBoolean(Config.RUN, true).apply();
+        prefs.edit().putBoolean(Config.RUN, true).putInt(Config.TAPS, 0)
+                .putString(Config.LAST_ERROR, "").apply();
         Config.status(this, "Iniciando… aguarde uma partida com espinhos laterais visíveis");
         game.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
         startActivity(game);
         refresh();
+    }
+
+    private void testTap() {
+        if (!isAccessibilityEnabled()) {
+            Toast.makeText(this, "Ative a acessibilidade primeiro", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            return;
+        }
+        Intent game = getPackageManager().getLaunchIntentForPackage(Config.PACKAGE);
+        if (game == null) {
+            Toast.makeText(this, "O jogo original não foi encontrado", Toast.LENGTH_LONG).show();
+            return;
+        }
+        prefs.edit().putBoolean(Config.RUN, false)
+                .putBoolean(Config.TEST_TAP, true)
+                .putLong(Config.TEST_TIME, android.os.SystemClock.uptimeMillis())
+                .putString(Config.LAST_ERROR, "")
+                .apply();
+        Config.status(this, "Teste de toque armado; aguarde no jogo");
+        startActivity(game);
     }
 
     private boolean isAccessibilityEnabled() {
@@ -189,7 +215,9 @@ public class MainActivity extends Activity {
         boolean running = prefs.getBoolean(Config.RUN, false);
         if (!enabled) statusText.setText("⚠ Acessibilidade desativada");
         else statusText.setText((running ? "● ATIVO — " : "○ PARADO — ") + prefs.getString(Config.STATUS, "Aguardando"));
-        detailText.setText(prefs.getString(Config.STATS, "Ative o bot e comece o modo clássico"));
+        detailText.setText(prefs.getString(Config.STATS, "Ative o bot e comece o modo clássico") +
+                (prefs.getString(Config.LAST_ERROR, "").isEmpty() ? "" :
+                "\nÚltima falha: " + prefs.getString(Config.LAST_ERROR, "")));
         startBtn.setText(enabled ? "▶ INICIAR NO JOGO" : "⚙ ATIVAR ACESSIBILIDADE");
     }
 

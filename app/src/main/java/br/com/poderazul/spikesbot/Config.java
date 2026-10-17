@@ -13,6 +13,10 @@ final class Config {
     static final String SAFETY = "safety";
     static final String STATUS = "status";
     static final String STATS = "stats";
+    static final String TEST_TAP = "test_tap";
+    static final String TEST_TIME = "test_time";
+    static final String LAST_ERROR = "last_error";
+    static final String TAPS = "taps";
     private Config() { }
     static SharedPreferences get(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);

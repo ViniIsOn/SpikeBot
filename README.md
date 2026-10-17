@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.2 beta 🐦
+# SpikesBot Kwai • v0.3 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -63,3 +63,14 @@ O Android pode restringir o serviço por motivos de segurança ou mudar seu comp
 O ícone agora é **vetorial XML**, desenhado com formas e cores, sem geração de imagem nem arquivos externos. O aplicativo também contém um botão **Abrir detalhes do app** e uma explicação sobre o aviso de configuração restrita do Android. Essa restrição é do sistema: o aplicativo não consegue desativá-la por código. Use a opção de autorização do próprio Android somente se confiar no APK.
 
 **Atenção ao atualizar:** o APK debug criado em outro ambiente GitHub Actions pode ter assinatura diferente. Se aparecer `O app não foi instalado`, talvez seja preciso desinstalar a versão anterior antes de instalar esta (isso apaga configurações locais).
+
+## v0.3 beta — correções após teste em Android 14
+
+- **Correção provável do fechamento constante:** as capturas da acessibilidade vêm como `Bitmap.Config.HARDWARE`. A versão anterior redimensionava essa imagem e chamava `getPixels()`; isso pode lançar `IllegalStateException`. A nova versão cria **explicitamente uma cópia ARGB_8888** antes da análise.
+- Processamento de imagens em thread de trabalho para reduzir travamentos da interface, e captura limitada pelo Android.
+- Tratamento de exceções de captura/detector/toque com diagnóstico local em Configurações do app (sem coleta/transmissão de dados).
+- Novo botão **TESTAR 1 TOQUE NO JOGO**: testa somente uma ação no jogo em primeiro plano, sem modo automático. Útil para distinguir um problema de acessibilidade de um problema de detecção visual.
+- Fila de análise otimizada para reduzir lixo temporário. Mantidos os modos **com doces** e **sem doces**.
+- Por segurança, o botão INICIAR ainda exige que o usuário abra uma partida manualmente: o bot **não clica automaticamente em menus ou anúncios**.
+
+Esta versão tem compilação automatizada, mas ainda precisa de testes em um dispositivo real com o jogo instalado. Não há promessa de acerto perfeito nem garantia de que o jogo atual seja reconhecido visualmente. Se não houver movimento, teste o botão de um único toque e envie um print do campo jogável e os estados de **Capturas / campo / pássaro** exibidos na tela do SpikesBot.

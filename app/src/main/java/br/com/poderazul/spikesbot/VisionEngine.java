@@ -3,7 +3,6 @@ package br.com.poderazul.spikesbot;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 
-import java.util.ArrayDeque;
 
 /**
  * Image-only heuristic controller for classic Don't Touch The Spikes.
@@ -74,7 +73,7 @@ final class VisionEngine {
         // Never tap automatically until the playing field is recognizable.
         boolean board = spikeEvidence > (maxY - minY) / 32;
         if (!board) {
-            return new Frame(false, false, false, "Aguardando partida (espinhos laterais não detectados)", 0, 0, 0);
+            return new Frame(false, false, false, "Campo não detectado. Toque para iniciar a partida; se continuar, mande um print do jogo", 0, 0, 0);
         }
 
         Blob bird = findBlob(colors, w, h, birdColor, true);
@@ -194,7 +193,9 @@ final class VisionEngine {
         }
         Blob best = null;
         double bestValue = -1e12;
-        ArrayDeque<Integer> flood = new ArrayDeque<>();
+        // A primitive queue avoids boxing tens of thousands of Integers per frame.
+        // Each pixel enters the queue at most once, so total capacity is sufficient.
+        int[] flood = new int[total];
         for (int y = yMin; y < yMax; y++) {
             for (int x = xMin; x < xMax; x++) {
                 int start = y*w + x;
@@ -202,9 +203,10 @@ final class VisionEngine {
                 mask[start] = 2;
                 Blob blob = new Blob(x,y);
                 long sumX = 0, sumY = 0;
-                flood.add(start);
-                while (!flood.isEmpty()) {
-                    int p = flood.removeFirst();
+                int head = 0, tail = 0;
+                flood[tail++] = start;
+                while (head < tail) {
+                    int p = flood[head++];
                     int px = p % w, py = p / w;
                     blob.count++;
                     sumX += px; sumY += py;
@@ -212,10 +214,10 @@ final class VisionEngine {
                     if (px > blob.maxX) blob.maxX = px;
                     if (py < blob.minY) blob.minY = py;
                     if (py > blob.maxY) blob.maxY = py;
-                    if (px > xMin && mask[p-1] == 1) { mask[p-1]=2; flood.add(p-1); }
-                    if (px+1 < xMax && mask[p+1] == 1) { mask[p+1]=2; flood.add(p+1); }
-                    if (py > yMin && mask[p-w] == 1) { mask[p-w]=2; flood.add(p-w); }
-                    if (py+1 < yMax && mask[p+w] == 1) { mask[p+w]=2; flood.add(p+w); }
+                    if (px > xMin && mask[p-1] == 1) { mask[p-1]=2; flood[tail++]=p-1; }
+                    if (px+1 < xMax && mask[p+1] == 1) { mask[p+1]=2; flood[tail++]=p+1; }
+                    if (py > yMin && mask[p-w] == 1) { mask[p-w]=2; flood[tail++]=p-w; }
+                    if (py+1 < yMax && mask[p+w] == 1) { mask[p+w]=2; flood[tail++]=p+w; }
                 }
                 if (blob.count < (birdSearch ? 18 : 7) || blob.count > (birdSearch ? 1700 : 600)) continue;
                 double width = blob.maxX - blob.minX + 1, height = blob.maxY - blob.minY + 1;
