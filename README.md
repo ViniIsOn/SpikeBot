@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v1.6 beta 🐦
+# SpikesBot Kwai • v1.7 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -251,3 +251,16 @@ Dados da caixa-preta enviada em 2026-10-17: 68 observações, 29 toques acumulad
 - Não afirma controle perfeito ou pontuação garantida: impulso real, atraso do Android e novos padrões de espinhos ainda podem exigir calibração. CONTÍNUO e modo DOCES preservados.
 
 Teste recomendado: VISÃO AO VIVO, skin Verde, sem doces, segurança 65%; compare a pontuação e, caso bata, envie um novo ZIP da caixa-preta. Revisar a tela antes de compartilhar imagens.
+
+## v1.7 — estabilizar após a regressão v1.6
+
+A caixa-preta da v1.6 registrou duas tentativas que chegaram a **8** e **1** pontos. A última imagem da primeira rodada mostra o pássaro ainda subindo ao se aproximar dos espinhos na parede direita. A antecipação agressiva inserida na v1.6 provavelmente aumentou os pulos indesejados.
+
+- **Reversão precisa:** `FlightLogic.java` foi restaurado diretamente do commit estável da v1.5, que alcançou 14 pontos. A correção agressiva da v1.6 foi inteiramente desativada. A v1.7 não promete pontuações superiores sem teste.
+- **Parada no fim de jogo:** uma grande sobreposição vermelha (placar, REPLAY e SHARE) é reconhecida e o bot para, em vez de continuar tocando e potencialmente reiniciar partidas sem autorização nova.
+- **Telemetria de gestos:** o ZIP da caixa-preta agora inclui `gestos.csv` com os momentos de envio, conclusão e cancelamento de toques. Diferente da coluna de decisões, são eventos de input reais. Nada é enviado automaticamente.
+- Um teste específico de reconhecimento do placar vermelho precisa ser validado no celular, pois outras skins/temas podem ter aparência diferente.
+- Modo CONTÍNUO, coleta opcional e captura autorizada são preservados.
+
+### Teste
+VISÃO AO VIVO, cor Verde, sem doces, segurança 65%. Faça uma partida; a expectativa é que pare na tela de pontuação e não reinicie. Compartilhe o ZIP apenas se desejar; revise as imagens antes. Nosso objetivo é tomar como base 14 pontos e evoluir com alterações menores e mensuráveis.

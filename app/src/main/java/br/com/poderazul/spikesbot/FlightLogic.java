@@ -84,50 +84,18 @@ final class FlightLogic {
         boolean jump=bestDelay>=0 && bestFlapScore+3<waitScore && bestDelay<=.085;
         if(urgentFall && bestDelay>=0 && bestDelay<=.16 &&
                 bestFlapScore<waitScore+35) jump=true;
-
-        // v1.6: An imminent wall needs EARLY altitude preparation.
-        // In the 14-point flight the bird was at x=69,Y=234, descending,
-        // while the next wall's clear lane was Y=166. The old delayed
-        // single-flap model WAITED twice and reacted too close to spikes.
-        //
-        // Use short-range vertical feedback in addition to the rollout:
-        // the controller will reconsider after every fresh visual frame.
-        double lookAhead=Math.min(.29,Math.max(.19,eta*.48));
-        double nearFutureY=y+vy*lookAhead+.5*gravity*lookAhead*lookAhead;
-        double altitudeError=nearFutureY-target;
-        boolean fallingOrSlowRise=vy>-h*.21;
-        boolean highLane=target<center-h*.075;
-        boolean wallPreparation=eta<1.25 && y>target+h*.045 &&
-                fallingOrSlowRise;
-        boolean forecastTooLow=altitudeError>h*(highLane?.022:.041) &&
-                fallingOrSlowRise;
-        boolean stillAboveFloorSoon=nearFutureY<floor-h*.045;
-
-        if ((wallPreparation || forecastTooLow) && stillAboveFloorSoon) {
-            jump=true; // start climbing before the wall, not at its spikes
-        }
-        // Treat an imminent floor collision as urgent even when an assumed
-        // delayed tap had a deceptively good score.
-        if(urgentFall && y>center && !ceilingThreat && vy>-h*.14)jump=true;
-
-        // Never fire a second flap while dangerously close to the roof.
-        // A fast upward motion is already making progress toward a high lane.
-        boolean futureCeilingThreat=y+Math.min(vy,0)*.16+
-                .5*gravity*.16*.16 < ceiling+h*.028;
-        if(ceilingThreat||futureCeilingThreat)jump=false;
+        if(ceilingThreat)jump=false;
         if(risingFast && !urgentFall)jump=false;
 
-        // Don't double-tap on a stale frame, but reduce the excessive delay
-        // from 285ms to 225ms; on the real phone the wall approaches rapidly.
-        if(sinceLastTapMs>=0 && sinceLastTapMs<225)jump=false;
+        // The latest image often arrives before the previous tap's upward
+        // impulse shows in the sprite. Avoid double-flapping based on stale Y.
+        if(sinceLastTapMs>=0 && sinceLastTapMs<285)jump=false;
 
-        String reason=jump?(wallPreparation?"antecipando parede":
-                forecastTooLow?"corrigindo queda antecipadamente":
-                "pulo necessario"):
-                ceilingThreat?"proximo do teto":
-                risingFast?"subindo rapidamente":
+        String reason=jump?"pulo necessario":
                 bestDelay>.085 && bestFlapScore+3<waitScore?
-                "aguardar momento do proximo pulo":"corrigindo altitude";
+                "aguardar momento do proximo pulo":
+                ceilingThreat?"proximo do teto":
+                risingFast?"subindo rapidamente":"corrigindo altitude";
         return new Plan(true,jump,target,noFlapEnd,flapNowEnd,eta,reason);
     }
 
