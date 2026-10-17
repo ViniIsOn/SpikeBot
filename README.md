@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.8 beta 🐦
+# SpikesBot Kwai • v0.9 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -140,3 +140,20 @@ Diagnóstico real do usuário na v0.7: **37 capturas, 10 válidas, 27 perdas de 
 
 ### Teste real sugerido
 Use VISÃO, Verde, sem doces, segurança 65% e frequência 65%. Faça uma tentativa e envie apenas o painel de diagnóstico. Compare **perdas de campo** e **falhas de captura** com os números da v0.7. Se continuarem altas, o próximo passo correto é um fluxo de captura de vídeo via MediaProjection, com consentimento, em vez de aumentar a quantidade arbitrária de toques.
+
+## v0.9 — Captura contínua com autorização por sessão
+
+O relatório da v0.8 tinha 164 capturas, 70 válidas, 70 perdas do campo, 24 perdas do pássaro, e nenhuma falha na captura. O uso de `AccessibilityService.takeScreenshot()` com ~700ms entre imagens era insuficiente para o ritmo do jogo.
+
+- O modo VISÃO (posição 2 na interface) usa **MediaProjection** e **ImageReader**, com aproximadamente 10 quadros por segundo, autorização expressa para cada sessão, serviço em primeiro plano e notificação do Android.
+- A opção de teste CONTÍNUO segue sem alterações; a visão por screenshots foi mantida como VISÃO ANTIGA.
+- O Android pede confirmação para capturar a **tela inteira**; não se deve autorizar gravação de um aplicativo isolado, pois o jogo é aberto depois.
+- Os quadros são analisados em memória, somente quando Don't Touch The Spikes está em primeiro plano. Não são gravados nem enviados à internet. O aplicativo continua sem permissão INTERNET.
+- O Android mostra a atividade de captura na notificação; **PARAR O BOT** encerra a projeção. É necessário pedir permissão novamente para outra sessão.
+- O piloto visual ainda é **experimental**. Capturas mais frequentes eliminam uma limitação conhecida, mas não garantem trajetórias seguras: é necessário calibrar física, detecção de espinhos e condições de fim de jogo.
+
+### Teste sugerido
+1. Abra SpikesBot, selecione VISÃO AO VIVO, cor Verde, sem doces.
+2. Clique iniciar; autorize o compartilhamento da tela inteira.
+3. Inicie a partida manualmente; observe alguns segundos.
+4. Volte ao SpikesBot, toque PARAR O BOT e envie o relatório. **Não precisa deixar o compartilhamento rodando** após o teste.

@@ -38,14 +38,14 @@ final class VisionEngine {
     private long lastSeenAt = 0, lastTapAt = 0;
     private int direction = 1; // 1 is going right
 
-    void reset() {
+    synchronized void reset() {
         lastX = -1; lastY = -1; vx = vy = 0;
         lastSeenAt = 0; lastTapAt = 0; direction = 1;
     }
 
-    void tapWasSent(long at) { lastTapAt = at; }
+    synchronized void tapWasSent(long at) { lastTapAt = at; }
 
-    Frame analyze(Bitmap bitmap, int birdColor, boolean collectCandy, int safety,
+    synchronized Frame analyze(Bitmap bitmap, int birdColor, boolean collectCandy, int safety,
                   int rate, long timestamp) {
         final int w = bitmap.getWidth(), h = bitmap.getHeight();
         if (w < 100 || h < 200) {

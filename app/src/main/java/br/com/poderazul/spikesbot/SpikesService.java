@@ -24,6 +24,8 @@ import android.view.accessibility.AccessibilityNodeInfo;
 public class SpikesService extends AccessibilityService {
     private static final String TAG = "SpikesBot";
     private static final long CAPTURE_GAP_MS = 700;
+    private static volatile SpikesService activeInstance;
+    static SpikesService activeInstance() { return activeInstance; }
     private static final long CAPTURE_TIMEOUT_MS = 1700;
     private static final long TIMED_START_DELAY_MS = 4000;
     private static final long TIMED_SESSION_LIMIT_MS = 60000;
@@ -50,12 +52,15 @@ public class SpikesService extends AccessibilityService {
     private volatile int goodFrames = 0, lostBirdFrames = 0, lostBoardFrames = 0, captureFailures = 0, gestureCancels = 0;
     private volatile int gestureCompletions = 0, captureTimeouts = 0;
     private long lastTimedStatus = 0;
+    private long lastSessionId = -1;
+    private volatile long latestProcessedLiveFrameAt = 0;
     private int frames = 0;
     private boolean wasActive = false;
 
     @Override protected void onServiceConnected() {
         super.onServiceConnected();
         destroyed = false;
+        activeInstance = this;
         visionFlapSuggested = false;
         lastVisionValidAt = 0;
         capturePendingSince = 0;
@@ -86,6 +91,8 @@ public class SpikesService extends AccessibilityService {
     }
 
     @Override public void onDestroy() {
+        if (activeInstance == this) activeInstance = null;
+        stopService(new android.content.Intent(this, LiveCaptureService.class));
         destroyed = true;
         main.removeCallbacks(loop);
         Config.get(this).edit().putBoolean(Config.RUN, false)
@@ -146,6 +153,16 @@ public class SpikesService extends AccessibilityService {
             return;
         }
         wasActive = true;
+        long sessionId = prefs.getLong(Config.SESSION_START, 0L);
+        if (sessionId > 0 && sessionId != lastSessionId) {
+            lastSessionId = sessionId;
+            frames = 0; goodFrames = 0; lostBirdFrames = 0;
+            lostBoardFrames = 0; captureFailures = 0; captureTimeouts = 0;
+            gestureCompletions = 0; gestureCancels = 0;
+            visionFlapSuggested = false;
+            lastVisionValidAt = 0;
+            if (worker != null) worker.post(vision::reset);
+        }
         if (!Config.PACKAGE.equals(activePackage())) {
             visionFlapSuggested = false;
             if (!screenshotPending) Config.status(this, "Aguardando o jogo original ficar em primeiro plano");
@@ -201,6 +218,23 @@ public class SpikesService extends AccessibilityService {
         // v0.6: keep the pilot responsive BETWEEN screenshots.
         // A fresh detection lasts only 550ms. If visual tracking is lost,
         // stop tapping instead of falling back to blind autoplay.
+        if (prefs.getInt(Config.MODE, 1) == 1) {
+            // MediaProjection delivers fresh frames to acceptLiveFrame().
+            // The expensive legacy takeScreenshot API is NOT called.
+            if (!LiveCaptureService.isCaptureActive()) {
+                visionFlapSuggested = false;
+                Config.status(this, "Aguardando autorização da captura contínua");
+                return;
+            }
+            long cadence = Math.max(155L, 300L - prefs.getInt(Config.RATE, 65));
+            if (visionFlapSuggested && !gesturePending &&
+                    lastVisionValidAt > 0 &&
+                    now - lastVisionValidAt < 240L &&
+                    now - lastGesture >= cadence) {
+                sendTap(false);
+            }
+            return;
+        }
         // One pending screenshot can sometimes never call back. A watchdog
         // recovers the capture loop instead of leaving the bot frozen.
         if (screenshotPending && capturePendingSince > 0 &&
@@ -309,6 +343,20 @@ public class SpikesService extends AccessibilityService {
         }
     }
 
+    /** Called on the projection worker; only the original game is examined. */
+    void acceptLiveFrame(Bitmap frame) {
+        if (destroyed || Config.get(this).getInt(Config.MODE, 1) != 1 ||
+                !Config.get(this).getBoolean(Config.RUN, false) ||
+                !Config.PACKAGE.equals(lastWindowPackage)) return;
+        try {
+            latestProcessedLiveFrameAt = SystemClock.uptimeMillis();
+            processFrame(frame);
+        } catch (RuntimeException failure) {
+            visionFlapSuggested = false;
+            problem("visão ao vivo", failure);
+        }
+    }
+
     private void processFrame(Bitmap scaled) {
         if (destroyed || !Config.get(this).getBoolean(Config.RUN, false)) return;
         SharedPreferences prefs = Config.get(this);
@@ -344,12 +392,14 @@ public class SpikesService extends AccessibilityService {
                 "Toques: " + prefs.getInt(Config.TAPS, 0) +
                 " • gestos OK: " + gestureCompletions +
                 " • cancelados: " + gestureCancels +
-                "\nCapturas: " + frames + " • válidas: " + goodFrames +
+                "\nQuadros: " + frames + " • válidos: " + goodFrames +
                 " • pássaro perdido: " + lostBirdFrames +
                 " • campo perdido: " + lostBoardFrames +
                 "\nFalhas de captura: " + captureFailures +
                 " • capturas travadas: " + captureTimeouts +
-                " • intervalo atual: " + captureGapMs + " ms" +
+                (prefs.getInt(Config.MODE, 1) == 1 ?
+                " • captura: fluxo contínuo" :
+                " • intervalo: " + captureGapMs + " ms") +
                 " • último quadro válido: " + age + " ms" +
                 "\nDecisão: " + lastVisionReason).apply();
     }
