@@ -23,7 +23,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
  */
 public class SpikesService extends AccessibilityService {
     private static final String TAG = "SpikesBot";
-    private static final long CAPTURE_GAP_MS = 285;
+    private static final long CAPTURE_GAP_MS = 700;
     private static final long CAPTURE_TIMEOUT_MS = 1700;
     private static final long TIMED_START_DELAY_MS = 4000;
     private static final long TIMED_SESSION_LIMIT_MS = 60000;
@@ -42,6 +42,10 @@ public class SpikesService extends AccessibilityService {
     private volatile long lastVisionValidAt = 0;
     private volatile boolean visionFlapSuggested = false;
     private volatile long capturePendingSince = 0;
+    // The Android accessibility screenshot API rejects overly fast capture
+    // requests with error 3. Back off adaptively rather than spamming it.
+    private volatile long captureGapMs = CAPTURE_GAP_MS;
+    private volatile int captureSuccessStreak = 0;
     private volatile String lastVisionReason = "Sem quadro";
     private volatile int goodFrames = 0, lostBirdFrames = 0, lostBoardFrames = 0, captureFailures = 0, gestureCancels = 0;
     private volatile int gestureCompletions = 0, captureTimeouts = 0;
@@ -55,6 +59,8 @@ public class SpikesService extends AccessibilityService {
         visionFlapSuggested = false;
         lastVisionValidAt = 0;
         capturePendingSince = 0;
+        captureGapMs = CAPTURE_GAP_MS;
+        captureSuccessStreak = 0;
         lastVisionReason = "Aguardando primeira captura";
         analysisThread = new HandlerThread("SpikesBot-vision");
         analysisThread.start();
@@ -208,14 +214,17 @@ public class SpikesService extends AccessibilityService {
             updateVisualStats(prefs);
         }
         long visionCadence = Math.max(280L, 340L - prefs.getInt(Config.RATE, 65) / 2L);
+        // A verified stage and bird are valid for a SHORT period between
+        // throttled screenshots. After that, stop: no hidden blind autoclicker.
+        long visionValidityMs = Math.min(1350L, captureGapMs + 490L);
         if (visionFlapSuggested && !gesturePending &&
-                lastVisionValidAt > 0 && now - lastVisionValidAt < 780 &&
+                lastVisionValidAt > 0 && now - lastVisionValidAt < visionValidityMs &&
                 now - lastGesture >= visionCadence) {
             sendTap(false);
         }
         if (screenshotPending) return;
         // Android throttles accessibility screenshots. Slower, stable reads beat fast failures.
-        long gap = CAPTURE_GAP_MS + (100 - prefs.getInt(Config.RATE, 65)) / 2;
+        long gap = captureGapMs + (100 - prefs.getInt(Config.RATE, 65)) / 2;
         if (now - lastCapture < gap) return;
         screenshotPending = true;
         capturePendingSince = now;
@@ -226,6 +235,12 @@ public class SpikesService extends AccessibilityService {
                 if (!destroyed && w != null && !w.post(runnable)) screenshotPending = false;
             }, new TakeScreenshotCallback() {
                 @Override public void onSuccess(ScreenshotResult result) {
+                    captureSuccessStreak++;
+                    // Recover slowly; never reduce below a conservative 700ms.
+                    if (captureSuccessStreak >= 10) {
+                        captureGapMs = Math.max(CAPTURE_GAP_MS, captureGapMs - 40);
+                        captureSuccessStreak = 0;
+                    }
                     try {
                         convertAndAnalyze(result);
                     } catch (RuntimeException error) {
@@ -244,8 +259,10 @@ public class SpikesService extends AccessibilityService {
                     String hint;
                     switch (code) {
                         case ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT:
-                            hint = "Limite de velocidade do Android";
-                            lastCapture = SystemClock.uptimeMillis() + 400;
+                            captureSuccessStreak = 0;
+                            captureGapMs = Math.min(1900L, captureGapMs + 280L);
+                            hint = "Captura limitada pelo Android; intervalo ajustado para " +
+                                    captureGapMs + " ms";
                             break;
                         case ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS:
                             hint = "Acesso de captura negado";
@@ -332,6 +349,7 @@ public class SpikesService extends AccessibilityService {
                 " • campo perdido: " + lostBoardFrames +
                 "\nFalhas de captura: " + captureFailures +
                 " • capturas travadas: " + captureTimeouts +
+                " • intervalo atual: " + captureGapMs + " ms" +
                 " • último quadro válido: " + age + " ms" +
                 "\nDecisão: " + lastVisionReason).apply();
     }

@@ -1,4 +1,4 @@
-# SpikesBot Kwai • v0.7 beta 🐦
+# SpikesBot Kwai • v0.8 beta 🐦
 
 **App Android experimental** para controlar o **jogo original** Don't Touch The Spikes (Ketchapp, pacote `com.ketchapp.donttouchthespikes`) no modo clássico. É um projeto independente, não oficial, sem imagens nem código do jogo original.
 
@@ -126,3 +126,17 @@ Esta versão tem compilação automatizada, mas ainda precisa de testes em um di
 - **Limitação:** não existe vídeo de gameplay com logs sincronizados, portanto não foi comprovado que a causa dos 2 pulos é queda, perda de visão ou cancelamento de capturas. A tela de diagnóstico ajudará a identificar.
 
 **Teste:** selecione VISÃO, Verde, sem doces e taxa 65%. Inicie uma partida. Ao observar a parada, volte ao app e envie a seção "STATUS / DIAGNÓSTICO" inteira. Não mantenha dois auto clickers ativados ao mesmo tempo.
+
+## v0.8 — corrigir causa dos 2 toques, não aumentar a contagem
+
+Diagnóstico real do usuário na v0.7: **37 capturas, 10 válidas, 27 perdas de campo e 18 erros de captura**, incluindo `ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT (3)`. Todos os 14 gestos contabilizados foram concluídos. Isso mostra que as limitações são capturas e percepção, não uma trava em 2 ou 3 toques.
+
+- Nova confirmação do campo pela diferença de brilho no **teto e no chão**, amostrando x=75% para ignorar o placar central e a sobreposição de captura à esquerda. Isso permite reconhecer a arena durante transições dos espinhos laterais, ainda exigindo encontrar o pássaro.
+- Intervalo inicial de captura aumentado para 700ms e **backoff adaptativo**: quando o Android retornar o erro 3, aumenta 280ms (máximo 1900ms). Após 10 capturas aceitas, reduz cautelosamente 40ms até o mínimo de 700ms.
+- A autorização para pular expira rapidamente entre capturas (máximo 1350ms). **Não há taps cegos ilimitados**, nem controle de menus. O modo CONTÍNUO foi mantido como estava.
+- O diagnóstico exibe o intervalo atual de captura, a razão da última decisão, falhas do sistema e número de quadros válidos.
+- As 4 imagens reais anteriores, de 686 × 1536 pixels, mostram contraste teto/arena e chão/arena de pelo menos 100 níveis na escala 0–255 à direita. Isso é evidência da nova regra, **não valida o voo em tempo real**.
+- A física e a previsão do movimento ainda precisam ser testadas no aparelho. O modo de doces continua opcional e não deve ser priorizado antes de uma partida sobreviver no modo sem doces.
+
+### Teste real sugerido
+Use VISÃO, Verde, sem doces, segurança 65% e frequência 65%. Faça uma tentativa e envie apenas o painel de diagnóstico. Compare **perdas de campo** e **falhas de captura** com os números da v0.7. Se continuarem altas, o próximo passo correto é um fluxo de captura de vídeo via MediaProjection, com consentimento, em vez de aumentar a quantidade arbitrária de toques.

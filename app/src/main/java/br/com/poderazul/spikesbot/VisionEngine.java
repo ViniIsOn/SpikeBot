@@ -74,11 +74,23 @@ final class VisionEngine {
             spikeR[y] = right ? 1 : 0;
             if (left || right) spikeEvidence++;
         }
-        // The start menu has spikes at top/bottom but not normally on both side walls.
-        // Never tap automatically until the playing field is recognizable.
-        boolean board = spikeEvidence > (maxY - minY) / 32;
+        // Some frames legitimately have no side spikes while the wall pattern
+        // is being replaced. Recognize the stage boundaries independently.
+        // x=.75 avoids both the big white score in the center and the
+        // screenshot editor overlay in the bottom-left of the user's samples.
+        // Using relative luminance works on both blue-grey and grey themes.
+        int atX = (int) (w * .75);
+        int ceiling = brightness(colors[(int)(h*.10)*w + atX]);
+        int topInside = brightness(colors[(int)(h*.27)*w + atX]);
+        int bottomInside = brightness(colors[(int)(h*.75)*w + atX]);
+        int floor = brightness(colors[(int)(h*.92)*w + atX]);
+        boolean boundedStage = topInside - ceiling > 43 &&
+                bottomInside - floor > 43;
+        boolean sideSpikes = spikeEvidence >= Math.max(8, (maxY - minY) / 32);
+        boolean board = boundedStage || sideSpikes;
         if (!board) {
-            return new Frame(false, false, false, "Campo não detectado. Toque para iniciar a partida; se continuar, mande um print do jogo", 0, 0, 0);
+            return new Frame(false, false, false,
+                    "Campo não reconhecido (bordas e paredes ausentes)", 0, 0, 0);
         }
 
         Blob bird = findBlob(colors, w, h, birdColor, true);
@@ -108,7 +120,7 @@ final class VisionEngine {
 
         // Select the widest spike-free window on the approaching wall.
         int[] nextWall = direction > 0 ? spikeR : spikeL;
-        int radius = (int) (h * (.029 + safety * .00023));
+        int radius = (int) (h * (.026 + safety * .00019));
         int bestY = (int) (h * .46);
         double bestCost = Double.POSITIVE_INFINITY;
         Blob candy = collectCandy ? findBlob(colors, w, h, 6, false) : null;
@@ -134,8 +146,14 @@ final class VisionEngine {
             if (cost < bestCost) { bestCost = cost; bestY = y; }
         }
         if (Double.isInfinite(bestCost)) {
-            // No convincing free window: do not invent a safe path.
-            return new Frame(true, true, false, "Sem corredor seguro reconhecível", bird.x, bird.y, bestY);
+            // If wall spikes are temporarily absent, this may mean they are
+            // transitioning rather than a full wall of danger. Continue
+            // tracking altitude only while both stage edges are identifiable.
+            if (boundedStage && spikeEvidence < 8) {
+                bestY = (int)(h * .46);
+            } else {
+                return new Frame(true, true, false, "Pausa: sem corredor seguro", bird.x, bird.y, bestY);
+            }
         }
 
         // Frame.jump now means "a flap is recommended", NOT "do a single
@@ -162,7 +180,7 @@ final class VisionEngine {
                 jump ? "queda: subir" : "altitude segura: aguardar";
         String status = (collectCandy && candyOnPath ?
                 "VISÃO • doce opcional" : "VISÃO • altitude") +
-                " • " + state +
+                " • " + state + (sideSpikes ? " • espinhos" : " • bordas") +
                 " • Y " + (int)bird.y + "→" + bestY;
         return new Frame(true, true, jump, status, bird.x, bird.y, bestY);
     }

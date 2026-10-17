@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
-        control.addView(label("CONTÍNUO: repete toques sem enxergar espinhos. VISÃO v0.7: tenta identificar a direção da queda antes de pular e mostra por que a automação para. Use a cor Verde nas suas capturas.", 12, MUTED, false));
+        control.addView(label("CONTÍNUO: segue com toques fixos. VISÃO v0.8: ajusta automaticamente as capturas para evitar bloqueio do Android, reconhece teto/chão mesmo durante a troca dos espinhos e para se perder o pássaro.", 12, MUTED, false));
         int intervalInitial = Math.max(250, Math.min(850, prefs.getInt(Config.INTERVAL, 420)));
         TextView intervalText = label("Intervalo entre toques: " + intervalInitial + " ms", 14, LIGHT, false);
         addMargin(control, intervalText, 9, 0, 0, 0);
@@ -150,7 +150,7 @@ public class MainActivity extends Activity {
         addMargin(status, statusText, 8, 0, 0, 0);
         detailText = label("Nenhuma partida iniciada", 12, MUTED, false);
         addMargin(status, detailText, 6, 0, 0, 0);
-        status.addView(label("Após uma tentativa, volte aqui: os números abaixo mostram se o pássaro sumiu da visão, o campo deixou de ser detectado ou o Android cancelou capturas.", 12, MUTED, false));
+        status.addView(label("Depois do teste, confira o número de campos perdidos, falhas de captura e o intervalo atual. O modo VISÃO ainda é experimental e não garante sobrevivência.", 12, MUTED, false));
 
         startBtn = actionButton("▶ INICIAR BOT AUTOMÁTICO", CYAN, BG);
         addMargin(screen, startBtn, 12, 8, 0, 0);
